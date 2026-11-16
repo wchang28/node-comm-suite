@@ -1,0 +1,46 @@
+{
+  "name": "node-comm-suite",
+  "version": "1.0.0",
+  "description": "",
+  "scripts": {
+    "transpile": "tsc",
+    "start": "node dist/sse-server.js",
+    "start-sse-server": "node dist/sse-server.js",
+    "start-sse-client": "node dist/sse-client.js",
+    "start-queue-test": "node dist/queue.js",
+    "test-basic-request-server": "node dist/sse-request/server-test-basic.js",
+    "test-basic-request-client": "node dist/sse-request/client-test.js",
+    "test-sse-server": "node dist/sse-request/server-test.js",
+    "test-task-launcher": "node dist/task-launcher/app.js",
+    "test-spawn": "node dist/test-spawn.js",
+    "test-pooling": "node dist/test-pooling.js",
+    "test-dispatcher": "node dist/dispatcher/test.js",
+    "test-json-stream": "node dist/test-json-stream.js",
+    "on-premises-proxy-server": "node dist/on-premises-data-gateway/proxy-server.js",
+    "on-premises-agent": "node dist/on-premises-data-gateway/agent.js",
+    "postinstall": "npm run transpile"
+  },
+  "author": "Wen Chang",
+  "license": "ISC",
+  "devDependencies": {
+    "@types/express": "^5.0.6",
+    "@types/helmet": "^0.0.48",
+    "@types/morgan": "^1.9.10",
+    "@types/mssql": "^9.1.9",
+    "@types/node": "^26.6.6",
+    "@types/pg": "^8.16.0",
+    "typescript": "^5.9.3"
+  },
+  "type": "module",
+  "dependencies": {
+    "eventsource-client": "^1.2.0",
+    "express": "^5.2.1",
+    "helmet": "^8.1.0",
+    "morgan": "^1.10.1",
+    "mssql": "^12.2.0",
+    "node-os-utils": "^2.0.1",
+    "pg": "^8.18.0",
+    "stream-json": "^3.8.0",
+    "tree-kill": "^1.2.2"
+  }
+}

@@ -1,0 +1,6 @@
+/* ./.vscode/launch.json
+            "outFiles": [
+                "${workspaceFolder}/dist/**/*.js"
+            ],
+            "preLaunchTask": "tsc: build - tsconfig.json",
+*/
