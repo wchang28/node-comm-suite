@@ -54,5 +54,5 @@ Thumbs.db
 *.pem
 *.key
 
-*cmds.txt
+sensitive/
 db-configs*.json
