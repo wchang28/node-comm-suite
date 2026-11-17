@@ -51,7 +51,8 @@ const server = app.listen(PORT, HOSTNAME, (err?: Error) => {
         console.error('Failed to start server:', err);
         process.exit(1);
     }
-    console.log(`Sequence number generator running on http://${HOSTNAME}:${PORT}/ (file: ${sequenceFilePath})`);
+    console.log(`Sequence number generator running on http://${HOSTNAME}:${PORT}/`);
+    console.log(`Sequence file: ${sequenceFilePath}`);
 });
 
 for (const sig of ['SIGTERM', 'SIGINT'] as const) {
