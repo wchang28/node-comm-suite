@@ -1,7 +1,7 @@
 import { EventEmitter } from "events";
 import { randomUUID } from "crypto";
 
-export type Processor<I, O> = (input: I) => O | Promise<O>;
+export type Processor<I, O> = (input: I) => Promise<O>;
 
 interface Job<I, O> {
     tag: string;
