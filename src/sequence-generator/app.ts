@@ -36,6 +36,11 @@ app.get('/health', async (req: Request, res: Response) => {
     }
 });
 
+app.get('/current', async (req: Request, res: Response) => {
+    const currentValue = await sequenceGenerator.current();
+    res.json(currentValue);
+});
+
 app.get('/next', async (req: Request, res: Response) => {
     const nextValue = await sequenceGenerator.next();
     res.json(nextValue);
@@ -46,7 +51,7 @@ const server = app.listen(PORT, HOSTNAME, (err?: Error) => {
         console.error('Failed to start server:', err);
         process.exit(1);
     }
-    console.log(`Sequence generator on http://${HOSTNAME}:${PORT}/ (file: ${sequenceFilePath})`);
+    console.log(`Sequence number generator running on http://${HOSTNAME}:${PORT}/ (file: ${sequenceFilePath})`);
 });
 
 for (const sig of ['SIGTERM', 'SIGINT'] as const) {

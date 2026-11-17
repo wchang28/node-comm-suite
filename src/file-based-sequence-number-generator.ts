@@ -15,13 +15,16 @@ export class FileBasedSequenceNumberGenerator {
         fs.writeFileSync(filePath, currentValue.toString(), "utf-8");
         return Promise.resolve();
     }
-    constructor(filePath: string) {
+    constructor(public filePath: string) {
         this.processor_ = new SequentialProcessor(async () => {
-            const currentValue = await this.readCurrentValue(filePath);
+            const currentValue = await this.readCurrentValue(this.filePath);
             const nextValue = (currentValue >= MAX_INT ? MIN_INT : currentValue + 1);
-            await this.writeCurrentValue(filePath, nextValue);
+            await this.writeCurrentValue(this.filePath, nextValue);
             return nextValue;
         });
+    }
+    async current(): Promise<number> {
+        return this.readCurrentValue(this.filePath);
     }
     async next(): Promise<number> {
         return this.processor_.submit();
