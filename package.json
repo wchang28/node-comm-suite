@@ -18,6 +18,7 @@
     "test-json-stream": "node dist/test-json-stream.js",
     "on-premises-proxy-server": "node dist/on-premises-data-gateway/proxy-server.js",
     "on-premises-agent": "node dist/on-premises-data-gateway/agent.js",
+    "sequence-generator": "node dist/sequence-generator/app.js",
     "postinstall": "npm run transpile"
   },
   "author": "Wen Chang",
