@@ -110,13 +110,9 @@ interface ConnectionEvents {
 
 export class Connection extends EventEmitter {
     private _pingInterval: NodeJS.Timeout | null = null;
-    private _remoteAddress: string | null = null;
-    private _remotePort: number | null = null;
     private _requestTrackers: Map<RequestId, RequestTracker> = new Map<RequestId, RequestTracker>();
-    constructor(public connId: ConnectionId, req: Request, private _response: Response, pingIntervalMS: number = 30000, public requestTimeoutMS: number = 30000) {
+    constructor(public connId: ConnectionId, private req_: Request, private _response: Response, pingIntervalMS: number = 30000, public requestTimeoutMS: number = 30000) {
         super();
-        this._remoteAddress = req.socket.remoteAddress || null;
-        this._remotePort = req.socket.remotePort || null;
         const me = this;
         this._pingInterval = setInterval(() => {
             me.sendPing();
@@ -133,6 +129,9 @@ export class Connection extends EventEmitter {
         ...args: ConnectionEvents[K]
     ): boolean {
         return super.emit(event, ...args);
+    }
+    get req(): Request {
+        return this.req_;
     }
     sendEventMessage(event: SSEEventType, data: any): void {
         const message = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
@@ -223,15 +222,16 @@ export class Connection extends EventEmitter {
         return this._requestTrackers.size;
     }
     get remoteAddress(): string | null {
-        return this._remoteAddress;
+        return this.req_.socket.remoteAddress || null;
     }   
     get remotePort(): number | null {
-        return this._remotePort;
+        return this.req_.socket.remotePort || null;
     }
     get remoteSocketAddress(): string {
-        const address = this._remoteAddress || '?';
-        const port = this._remotePort !== null ? `${this._remotePort}` : '?';
-        return `${address}:${port}`;
+        const address = this.remoteAddress || '?';
+        const port = this.remotePort;
+        const s_port = (port !== null ? `${port}` : '?');
+        return `${address}:${s_port}`;
     }
 }
 

@@ -1,4 +1,4 @@
-import express, { Request, Response } from 'express';
+import express, { NextFunction, Request, Response } from 'express';
 import morgan from 'morgan';
 import helmet from 'helmet';
 import {ConnectionManager as RequestConnectionManager} from '../sse-request/connection-manager.js';
@@ -40,15 +40,14 @@ app.get('/health', (req: Request, res: Response) => {
     });
 });
 
-const taskLauncherRouter = express.Router();
-app.use('/task-launcher', taskLauncherRouter);
 
 const PING_INTERVAL_MS = 30000; // 30 seconds
 const REQUEST_TIMEOUT_MS = 30000; // 30 seconds
-const connectionManager = new RequestConnectionManager(PING_INTERVAL_MS, REQUEST_TIMEOUT_MS);
+
+const nodesConnectionManager = new RequestConnectionManager(PING_INTERVAL_MS, REQUEST_TIMEOUT_MS);
 
 const JOB_KILL_RETRIES = 2;
-const dispatcher = new Dispatcher(connectionManager, JOB_KILL_RETRIES);
+const dispatcher = new Dispatcher(nodesConnectionManager, JOB_KILL_RETRIES);
 
 dispatcher.on("dispatching", (sessionId) => {
     console.log(`Dispatcher <<dispatching>>: sessionId=${sessionId}`);
@@ -75,6 +74,14 @@ nodesTracker.on("node-added", (node) => {
     console.log(`Node ${node.hostname} (ID: ${node.id}) <<task-finished-on-node>>:`, JSON.stringify(payload));
 });
 
+const taskLauncherRouter = express.Router();
+app.use('/task-launcher', taskLauncherRouter);
+// SSE endpoint for task launcher: /task-launcher/events
+nodesConnectionManager.setupExpressRouter(taskLauncherRouter, "/events");
+
+const dispatcherMonitorConnectionManager = new RequestConnectionManager(PING_INTERVAL_MS, REQUEST_TIMEOUT_MS);
+const recentJobsMonitorConnectionManager = new RequestConnectionManager(PING_INTERVAL_MS, REQUEST_TIMEOUT_MS);
+
 class LocalDispatcherAbstraction implements IDispatcherAbstraction {
     constructor(private _dispatcher: Dispatcher) {
     }
@@ -86,12 +93,19 @@ class LocalDispatcherAbstraction implements IDispatcherAbstraction {
     }
 }
 
-app.use((req: Request, res: Response, next) => {
+const authorizationMiddleware = (req: Request, res: Response, next: NextFunction) => {
+    // Implement your authorization logic here
     const req_gs = new RequestGetSet(req);
+    const authHeader = req.headers.authorization || "";
     req_gs.user = {
         id: "00000000-0000-0000-0000-000000000001",
         name: "Test Person"
     };
+    next();
+};
+
+app.use(authorizationMiddleware, (req: Request, res: Response, next: NextFunction) => {
+    const req_gs = new RequestGetSet(req);
     req_gs.poolDataPlaneDBPool = poolDataPlaneDBPool;
     req_gs.dispatcher = new LocalDispatcherAbstraction(dispatcher);
     req_gs.fetchSelf = (path: string, init?: RequestInit) => {
@@ -105,15 +119,46 @@ app.use((req: Request, res: Response, next) => {
     next();
 });
 
-app.use('/job', jobRouter);
+const dispatcherMonitorRouter = express.Router();
+app.use('/dispatcher-monitor', dispatcherMonitorRouter);
+// SSE endpoint for dispatcher monitor: /dispatcher-monitor/events
+dispatcherMonitorConnectionManager.setupExpressRouter(dispatcherMonitorRouter, "/events");
 
-// SSE endpoint for task launcher: /task-launcher/events
-connectionManager.setupExpressRouter(taskLauncherRouter, "/events");
+const recentJobsMonitorRouter = express.Router();
+app.use('/recent-jobs-monitor', recentJobsMonitorRouter);
+// SSE endpoint for recent jobs monitor: /recent-jobs-monitor/events
+recentJobsMonitorConnectionManager.setupExpressRouter(recentJobsMonitorRouter, "/events");
+
+app.get("/monitors", (req: Request, res: Response) => {
+    const req_gs = new RequestGetSet(req);
+    const thisUser = req_gs.user;
+    let connectionLists = dispatcherMonitorConnectionManager.connectionLists;
+    let monitorType = "dispatcher";
+    for (const connection of connectionLists) {
+        const req_gs = new RequestGetSet(connection.req);
+        const user = req_gs.user;
+        const isMe = (user.id === thisUser.id);
+    }
+    connectionLists = recentJobsMonitorConnectionManager.connectionLists
+    monitorType = "recent-jobs";
+    for (const connection of connectionLists) {
+        const req_gs = new RequestGetSet(connection.req);
+        const connId = connection.connId;
+        const remoteAddress = connection.remoteSocketAddress;
+        const user = req_gs.user;
+        const isMe = (user.id === thisUser.id);
+    }
+    res.sendStatus(200);
+});
+
+app.use('/job', jobRouter);
 
 // Start server
 const server = app.listen(PORT, HOSTNAME, () => {
     console.log(`SSE Server running on http://${HOSTNAME}:${PORT}`);
     console.log(`Task launcher SSE endpoint: http://${HOSTNAME}:${PORT}/task-launcher/events`);
+    console.log(`Dispatcher monitor SSE endpoint: http://${HOSTNAME}:${PORT}/dispatcher-monitor/events`);
+    console.log(`Recent jobs monitor SSE endpoint: http://${HOSTNAME}:${PORT}/recent-jobs-monitor/events`);
     console.log(`Health check: http://${HOSTNAME}:${PORT}/health`);
 });
 
