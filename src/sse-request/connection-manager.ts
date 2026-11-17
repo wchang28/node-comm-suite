@@ -238,6 +238,7 @@ export class Connection extends EventEmitter {
 interface ConnectionManagerEvents {
     "connected": [connection: Connection];
     "disconnected": [connection: Connection];
+    "change": [];
     "connection-rejected": [remoteAddress: string|null, remotePort: number|null];
 }
 
@@ -278,6 +279,7 @@ export class ConnectionManager extends EventEmitter {
             if (index >= 0) {
                 this._connectionLists.splice(index, 1);
                 this.emit('disconnected', connection);
+                this.emit('change');
             }
         }
     }
@@ -340,6 +342,7 @@ export class ConnectionManager extends EventEmitter {
                     me.onClientDisconnect(connection.connId);
                 });
                 me.emit('connected', connection);
+                me.emit('change');
             } else {
                 // Instantly destroys the socket connection
                 const remoteAddress = req.socket?.remoteAddress || null;

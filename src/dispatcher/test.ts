@@ -81,6 +81,7 @@ nodesConnectionManager.setupExpressRouter(taskLauncherRouter, "/events");
 
 const dispatcherMonitorConnectionManager = new RequestConnectionManager(PING_INTERVAL_MS, REQUEST_TIMEOUT_MS);
 const recentJobsMonitorConnectionManager = new RequestConnectionManager(PING_INTERVAL_MS, REQUEST_TIMEOUT_MS);
+const connectionsMonitorConnectionManager = new RequestConnectionManager(PING_INTERVAL_MS, REQUEST_TIMEOUT_MS);
 
 class LocalDispatcherAbstraction implements IDispatcherAbstraction {
     constructor(private _dispatcher: Dispatcher) {
@@ -119,6 +120,11 @@ app.use(authorizationMiddleware, (req: Request, res: Response, next: NextFunctio
     next();
 });
 
+app.get("/me", (req: Request, res: Response) => {
+    const req_gs = new RequestGetSet(req);
+    res.json(req_gs.user);
+});
+
 const dispatcherMonitorRouter = express.Router();
 app.use('/dispatcher-monitor', dispatcherMonitorRouter);
 // SSE endpoint for dispatcher monitor: /dispatcher-monitor/events
@@ -129,15 +135,18 @@ app.use('/recent-jobs-monitor', recentJobsMonitorRouter);
 // SSE endpoint for recent jobs monitor: /recent-jobs-monitor/events
 recentJobsMonitorConnectionManager.setupExpressRouter(recentJobsMonitorRouter, "/events");
 
-app.get("/monitors", (req: Request, res: Response) => {
+const connectionsMonitorRouter = express.Router();
+app.use('/connections-monitor', connectionsMonitorRouter);
+// SSE endpoint for connections monitor: /connections-monitor/events
+connectionsMonitorConnectionManager.setupExpressRouter(connectionsMonitorRouter, "/events");
+
+app.get("/connections", (req: Request, res: Response) => {
     const req_gs = new RequestGetSet(req);
-    const thisUser = req_gs.user;
     let connectionLists = dispatcherMonitorConnectionManager.connectionLists;
     let monitorType = "dispatcher";
     for (const connection of connectionLists) {
         const req_gs = new RequestGetSet(connection.req);
         const user = req_gs.user;
-        const isMe = (user.id === thisUser.id);
     }
     connectionLists = recentJobsMonitorConnectionManager.connectionLists
     monitorType = "recent-jobs";
@@ -146,7 +155,6 @@ app.get("/monitors", (req: Request, res: Response) => {
         const connId = connection.connId;
         const remoteAddress = connection.remoteSocketAddress;
         const user = req_gs.user;
-        const isMe = (user.id === thisUser.id);
     }
     res.sendStatus(200);
 });
@@ -159,6 +167,7 @@ const server = app.listen(PORT, HOSTNAME, () => {
     console.log(`Task launcher SSE endpoint: http://${HOSTNAME}:${PORT}/task-launcher/events`);
     console.log(`Dispatcher monitor SSE endpoint: http://${HOSTNAME}:${PORT}/dispatcher-monitor/events`);
     console.log(`Recent jobs monitor SSE endpoint: http://${HOSTNAME}:${PORT}/recent-jobs-monitor/events`);
+    console.log(`Connections monitor SSE endpoint: http://${HOSTNAME}:${PORT}/connections-monitor/events`);
     console.log(`Health check: http://${HOSTNAME}:${PORT}/health`);
 });
 
