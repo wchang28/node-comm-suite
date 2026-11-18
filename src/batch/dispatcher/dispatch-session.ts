@@ -10,9 +10,9 @@ import {
     CPUUsageByNode,
     TaskLauncherAckError,
     INodeTaskDispatcher
-} from '../type.js';
-import {getRandomInt, generateGuid, error_message} from '../utils.js';
-import {RequestError as SSERequestError, ConnectionManagerError} from "../sse-request/types.js";
+} from '../types.js';
+import {getRandomInt, generateGuid, error_message} from '../../utils.js';
+import {RequestError as SSERequestError, ConnectionManagerError} from "../../sse-request/types.js";
 import assert from 'assert';
 
 export type TaskDispatchError = TaskLauncherAckError | SSERequestError | ConnectionManagerError;

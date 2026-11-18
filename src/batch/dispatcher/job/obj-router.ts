@@ -1,7 +1,7 @@
 import express from 'express';
 import {RequestGetSet} from '../request-get-set.js';
-import { JobId, Job, Task} from '../../type.js';
-import { error_message } from '../../utils.js';
+import { JobId, Job, Task} from '../../types.js';
+import { error_message } from '../../../utils.js';
 import { PoolPermission } from '../pool-permission.js';
 
 const router = express.Router();

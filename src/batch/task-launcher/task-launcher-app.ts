@@ -1,5 +1,5 @@
-import {Client, ClientState} from "../sse-request/client.js";
-import {RequestContent, RequestResponse, ConnectionId, RequestId} from "../sse-request/types.js";
+import {Client, ClientState} from "../../sse-request/client.js";
+import {RequestContent, RequestResponse, ConnectionId, RequestId} from "../../sse-request/types.js";
 import {
     IJobTaskExecDB,
     TaskExecResult,
@@ -33,8 +33,8 @@ import {
     ISystemLoadingLogger,
     TaskFinishedMsgPayload,
     KillJobProcessesResult,
-} from "../type.js";
-import {error_message, generateGuid} from "../utils.js";
+} from "../types.js";
+import {error_message, generateGuid} from "../../utils.js";
 import { EventEmitter } from 'events';
 import os from 'os';
 import fs from 'fs';
@@ -43,7 +43,7 @@ import morgan from 'morgan';
 import helmet from 'helmet';
 import { OSUtils } from 'node-os-utils';
 import { IJobTaskExecDBPool } from "./db-pools.js";
-import { Pooling } from "../pooling.js";
+import { Pooling } from "../../pooling.js";
 import { assert } from "console";
 
 interface NodeIdentity {

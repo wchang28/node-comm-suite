@@ -1,10 +1,10 @@
 import { EventEmitter } from 'events';
-import { ConnectionManager } from '../sse-request/connection-manager.js';
+import { ConnectionManager } from '../../sse-request/connection-manager.js';
 import { Queue, QueueJSON } from './queue.js';
 import { Node, NodesTracker } from './nodes.js'
 import { DispatchSession, DispatchResultRow, DispatchSessionJSON } from './dispatch-session.js';
-import { JobId, NodeIdentifyInfo, NodeInfoRow } from '../type.js';
-import { sleep } from "../utils.js";
+import { JobId, NodeIdentifyInfo, NodeInfoRow } from '../types.js';
+import { sleep } from "../../utils.js";
 import { JobsKillQueue } from './jobs-kill-queue.js';
 import assert from "assert";
 

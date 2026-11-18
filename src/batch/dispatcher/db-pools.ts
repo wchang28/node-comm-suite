@@ -1,5 +1,5 @@
-import { JobId, Task, Job } from "../type.js";
-import { SupportedDBType } from "../db-types.js";
+import { JobId, Task, Job } from "../types.js";
+import { SupportedDBType } from "../../db-types.js";
 import assert from "node:assert";
 import sql from 'mssql';
 import pg from 'pg';

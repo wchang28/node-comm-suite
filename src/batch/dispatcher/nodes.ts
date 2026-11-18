@@ -16,9 +16,9 @@ import {
     TaskFinishedMsgPayload,
     JobId,
     KillJobProcessesResult
-} from '../type.js';
-import {ConnectionManagerError} from "../sse-request/types.js"; 
-import {Connection} from "../sse-request/connection-manager.js";
+} from '../types.js';
+import {ConnectionManagerError} from "../../sse-request/types.js"; 
+import {Connection} from "../../sse-request/connection-manager.js";
 import assert from "assert";
 
 export interface NodeEvents {

@@ -4,7 +4,7 @@ import chain from 'stream-chain';
 import fs from 'node:fs';
 import {ObjectTransformStream} from "./streams/object-transform-stream.js";
 import {PagifyStream} from "./streams/pagification.js";
-import {JobId, Task, TaskIndex} from "./type.js";
+import {JobId, Task, TaskIndex} from "./batch/types.js";
 import {JsonStringifyStream} from "./streams/json-stringify-stream.js";
 import {StringWritable}  from "./streams/string-stream.js";
 

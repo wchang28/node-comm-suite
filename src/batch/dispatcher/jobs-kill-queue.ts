@@ -1,5 +1,5 @@
 import { EventEmitter } from 'events';
-import { JobId } from "../type.js";
+import { JobId } from "../types.js";
 
 export interface JobsKillQueueEvents {
     "change": [];

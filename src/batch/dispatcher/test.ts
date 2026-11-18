@@ -1,10 +1,10 @@
 import express, { NextFunction, Request, Response } from 'express';
 import morgan from 'morgan';
 import helmet from 'helmet';
-import {ConnectionManager as RequestConnectionManager} from '../sse-request/connection-manager.js';
+import {ConnectionManager as RequestConnectionManager} from '../../sse-request/connection-manager.js';
 import {Dispatcher} from "./dispatcher.js";
-import { JobId } from "../type.js";
-import { DBConfigsFile, toDBConfig } from "../db-types.js";
+import { JobId } from "../types.js";
+import { DBConfigsFile, toDBConfig } from "../../db-types.js";
 import fs from 'node:fs';
 import { createPoolDataPlaneDBPool } from "./db-pools.js";
 import { RequestGetSet } from "./request-get-set.js";

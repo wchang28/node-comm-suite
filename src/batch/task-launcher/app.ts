@@ -1,6 +1,6 @@
 import { TaskLauncherApp } from "./task-launcher-app.js";
 import { createDBPool } from "./db-pools.js";
-import { DBConfigsFile, toDBConfig } from "../db-types.js";
+import { DBConfigsFile, toDBConfig } from "../../db-types.js";
 import { RequestBasedSystemLoadingLogger } from "../request-based-system-loading-logger.js";
 import fs from 'node:fs';
 

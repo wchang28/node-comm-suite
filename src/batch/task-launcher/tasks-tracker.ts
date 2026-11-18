@@ -5,12 +5,12 @@ import {
     JobId,
     TaskIndex,
     TaskLauncherAckError
-} from "../type.js";
+} from "../types.js";
 import { spawn, ChildProcessWithoutNullStreams } from 'child_process';
 import { PassThrough } from 'stream';
 import {text} from 'stream/consumers';
 import treeKill from 'tree-kill';
-import { error_message } from '../utils.js';
+import { error_message } from '../../utils.js';
 
 export interface TaskExecParams {
     cmd: string;

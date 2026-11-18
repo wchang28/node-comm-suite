@@ -1,7 +1,7 @@
 import { EventEmitter } from 'events';
 import assert from 'assert';
-import { getRandomInt } from '../utils.js';
-import {JobId, TaskIndex, TaskItems} from "../type.js";
+import { getRandomInt } from '../../utils.js';
+import {JobId, TaskIndex, TaskItems} from "../types.js";
 
 export interface QueueEvents {
     "tasks-queued": [];

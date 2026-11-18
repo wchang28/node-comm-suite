@@ -3,7 +3,7 @@ import {
     NodeSessionId,
     NodeName,
     SystemLoadingInfo,
-} from "./type.js";
+} from "./types.js";
 
 export class RequestBasedSystemLoadingLogger implements ISystemLoadingLogger {
     constructor(private _url: string) {

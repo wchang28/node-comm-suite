@@ -1,6 +1,6 @@
 import { EventEmitter } from "events";
-import {ConnectionManager} from "../sse-request/connection-manager.js";
-import type {ConnectionId} from "../sse-request/types.js";
+import {ConnectionManager} from "../../sse-request/connection-manager.js";
+import type {ConnectionId} from "../../sse-request/types.js";
 import {RequestGetSet}  from "./request-get-set.js";
 
 export type MonitoringTopic = "dispatcher" | "recent-jobs" | "connections";

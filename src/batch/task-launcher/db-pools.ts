@@ -1,5 +1,5 @@
-import { JobId, NodeId, NodeName, NodeSessionId, PID, TaskIndex } from "../type.js";
-import { SupportedDBType } from "../db-types.js";
+import { JobId, NodeId, NodeName, NodeSessionId, PID, TaskIndex } from "../types.js";
+import { SupportedDBType } from "../../db-types.js";
 import { TaskExecParamsInfo} from "./tasks-tracker.js";
 import assert from "node:assert";
 import sql from 'mssql';

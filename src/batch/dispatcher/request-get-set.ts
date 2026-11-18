@@ -1,6 +1,6 @@
 import type { Request } from 'express';
 import type { IPoolDataPlaneDBPool } from './db-pools.js';
-import type { User, Job } from '../type.js';
+import type { User, Job } from '../types.js';
 import type { IDispatcherAbstraction, SelfFetchFunction } from './types.js';
 
 export class RequestGetSet {

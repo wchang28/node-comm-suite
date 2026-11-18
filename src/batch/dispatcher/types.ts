@@ -1,4 +1,4 @@
-import { JobId } from '../type.js';
+import { JobId } from '../types.js';
 
 export interface IDispatcherAbstraction {
     queueJob(jobId: JobId, numTasks: number): Promise<void>;

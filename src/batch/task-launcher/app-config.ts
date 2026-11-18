@@ -1,5 +1,5 @@
-import {SystemLoadingMonitorConfig} from "../type.js";
-import {DBConfig} from "../db-types.js";
+import {SystemLoadingMonitorConfig} from "../types.js";
+import {DBConfig} from "../../db-types.js";
 
 export interface CPUConfig {
     reservedCPUs?: number | null;

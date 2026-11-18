@@ -1,4 +1,4 @@
-import { Job, User } from '../type.js';
+import { Job, User } from '../types.js';
 
 export class PoolPermission {
     public constructor(public user: User) {
