@@ -108,11 +108,15 @@ export interface ClientEvents {
     "event-notify": [event: string, data?: any];    // emitted when a <notify> message is received from the SSE server
 }
 
+const defaultRequestProcessor: RequestProcessor = async (request: RequestContent) => {
+    return Promise.resolve({status: 200, body: {}, headers: {} } as RequestResponse);
+};
+
 export class Client extends EventEmitter {
     private _readyTracker: ReadyTracker = new ReadyTracker();
     private _readyPromise: Promise<void>; 
     private _eventSource: EventSourceClient | null = null;
-    constructor(private sseUrl: string, private _requestProcessor: RequestProcessor) {
+    constructor(private sseUrl: string, private _requestProcessor: RequestProcessor = defaultRequestProcessor) {
         super();
         assert(sseUrl, "SSE URL should be non-empty");
         this.initReadyTracker();
