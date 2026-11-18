@@ -11,7 +11,7 @@
     "test-basic-request-server": "node dist/sse-request/server-test-basic.js",
     "test-basic-request-client": "node dist/sse-request/client-test.js",
     "test-sse-server": "node dist/sse-request/server-test.js",
-    "test-dispatcher": "node dist/batch/dispatcher/test.js",
+    "test-dispatcher": "node dist/batch/dispatcher/app.js",
     "test-task-launcher": "node dist/batch/task-launcher/app.js",
     "test-spawn": "node dist/test-spawn.js",
     "test-pooling": "node dist/test-pooling.js",
