@@ -55,13 +55,13 @@ CREATE TABLE [pool_01].[GridJobs](
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, FILLFACTOR = 90, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
 ) ON [PRIMARY]
 GO
-/****** Object:  View [pool_01].[vPoolJobsView]    Script Date: 11/13/2026 2:12:37 PM ******/
+/****** Object:  View [pool_01].[v_pool_jobs_view]    Script Date: 11/13/2026 2:12:37 PM ******/
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
 
-CREATE VIEW [pool_01].[vPoolJobsView]
+CREATE VIEW [pool_01].[v_pool_jobs_view]
 AS
 	WITH stat AS
 	(
@@ -172,7 +172,7 @@ BEGIN
 	,[abortTime]=GETDATE()
 	WHERE [jobId]=@jobId
 
-	SELECT * FROM [pool_01].[vPoolJobsView] (NOLOCK) WHERE [jobId]=@jobId
+	SELECT * FROM [pool_01].[v_pool_jobs_view] (NOLOCK) WHERE [jobId]=@jobId
 END
 GO
 /****** Object:  StoredProcedure [pool_01].[stp_job_append_tasks_page]    Script Date: 11/13/2026 2:12:37 PM ******/
@@ -189,7 +189,7 @@ BEGIN
 	SET NOCOUNT ON;
 
 	DECLARE @numTasks INT
-	SELECT @numTasks=[numTasks] FROM [pool_01].[vPoolJobsView] (NOLOCK) WHERE [jobId]=@jobId
+	SELECT @numTasks=[numTasks] FROM [pool_01].[v_pool_jobs_view] (NOLOCK) WHERE [jobId]=@jobId
 	IF @numTasks IS NOT NULL
 	BEGIN
 		;WITH base AS
@@ -222,7 +222,7 @@ BEGIN
 		ORDER BY [idx] ASC
 	END
 
-	SELECT * FROM [pool_01].[vPoolJobsView] (NOLOCK) WHERE [jobId]=@jobId
+	SELECT * FROM [pool_01].[v_pool_jobs_view] (NOLOCK) WHERE [jobId]=@jobId
 END
 GO
 /****** Object:  StoredProcedure [pool_01].[stp_job_create_new]    Script Date: 11/13/2026 2:12:37 PM ******/
@@ -244,7 +244,7 @@ BEGIN
 	DECLARE @jobId BIGINT
     INSERT INTO [pool_01].[GridJobs] ([userId],[userName],[description],[tag]) VALUES (@userId,@userName,@description,@tag)
 	SELECT @jobId=SCOPE_IDENTITY()
-	SELECT * FROM [pool_01].[vPoolJobsView] (NOLOCK) WHERE [jobId]=@jobId
+	SELECT * FROM [pool_01].[v_pool_jobs_view] (NOLOCK) WHERE [jobId]=@jobId
 END
 GO
 /****** Object:  StoredProcedure [pool_01].[stp_job_delete]    Script Date: 11/13/2026 2:12:37 PM ******/
@@ -258,7 +258,7 @@ CREATE PROCEDURE [pool_01].[stp_job_delete]
 AS
 BEGIN
 	SET NOCOUNT ON;
-	SELECT * FROM [pool_01].[vPoolJobsView] (NOLOCK) WHERE [jobId]=@jobId
+	SELECT * FROM [pool_01].[v_pool_jobs_view] (NOLOCK) WHERE [jobId]=@jobId
 	DELETE FROM [pool_01].[GridJobs] WHERE [jobId]=@jobId
 	DELETE FROM [pool_01].[GridJobTasks] WHERE [jobId]=@jobId
 END
@@ -274,7 +274,7 @@ CREATE PROCEDURE [pool_01].[stp_job_get]
 AS
 BEGIN
 	SET NOCOUNT ON;
-	SELECT * FROM [pool_01].[vPoolJobsView] (NOLOCK) WHERE [jobId]=@jobId
+	SELECT * FROM [pool_01].[v_pool_jobs_view] (NOLOCK) WHERE [jobId]=@jobId
 END
 GO
 /****** Object:  StoredProcedure [pool_01].[stp_job_task_exec_ack]    Script Date: 11/13/2026 2:12:37 PM ******/
@@ -437,11 +437,11 @@ BEGIN
 		FROM @tmp
 		ORDER BY [index] ASC
 
-		SELECT * FROM [pool_01].[vPoolJobsView] (NOLOCK) WHERE [jobId]=@newJobId
+		SELECT * FROM [pool_01].[v_pool_jobs_view] (NOLOCK) WHERE [jobId]=@newJobId
 	END
 	ELSE
 	BEGIN
-		SELECT * FROM [pool_01].[vPoolJobsView] (NOLOCK) WHERE 1=0
+		SELECT * FROM [pool_01].[v_pool_jobs_view] (NOLOCK) WHERE 1=0
 	END
 
 END

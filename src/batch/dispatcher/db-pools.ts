@@ -11,6 +11,7 @@ export interface IPoolDataPlaneDBPool {
     deleteJob(jobId: JobId): Promise<Job>;
     abortJob(userId: string, userName: string, jobId: JobId): Promise<Job>;
     replicateJob(userId: string, userName: string, jobId: JobId, failedTasksOnly: boolean): Promise<Job>;
+    getMostRecentJobs(limit: number): Promise<Job[]>;
 }
 
 class PoolDataPlaneDBPoolBase {
@@ -94,6 +95,14 @@ class MSSQLPoolDataPlaneDBPool extends PoolDataPlaneDBPoolBase implements IPoolD
         const rows = result.recordset as Job[];
         return this.handleJobActionResult(rows, jobId, 'replicateJob');
     }
+    async getMostRecentJobs(limit: number) {
+        const pool = await this._poolReady;
+        const result = await pool.request()
+            .input('limit', sql.Int, limit)
+            .query(`SELECT TOP (@limit) * FROM ${this._schema}.v_pool_jobs_view (NOLOCK) ORDER BY jobId DESC`)
+        const rows = result.recordset as Job[];
+        return rows;
+    }
 }
 
 /**
@@ -134,6 +143,11 @@ class PostgresPoolDataPlaneDBPool extends PoolDataPlaneDBPoolBase implements IPo
         const result = await this._pool.query(`CALL ${this._schema}.stp_job_replicate($1, $2, $3, $4)`, [userId, userName, jobId, failedTasksOnly]);
         const rows = result.rows as Job[];
         return this.handleJobActionResult(rows, jobId, 'replicateJob');
+    }
+    async getMostRecentJobs(limit: number) {
+        const result = await this._pool.query(`SELECT * FROM ${this._schema}.v_pool_jobs_view ORDER BY "jobId" DESC LIMIT $1`, [limit]);
+        const rows = result.rows as Job[];
+        return rows;
     }
 }
 

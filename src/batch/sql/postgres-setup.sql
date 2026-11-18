@@ -79,9 +79,9 @@ CREATE INDEX "IX_GridJobTasks_jobId_status" ON pool_01."GridJobTasks" ("jobId" A
 CREATE INDEX "IX_GridJobTasks_jobId_tag"    ON pool_01."GridJobTasks" ("jobId" ASC, "tag" ASC);
 
 -- -----------------------------------------------------------------------------
--- View pool_01."vPoolJobsView"
+-- View pool_01.v_pool_jobs_view
 -- -----------------------------------------------------------------------------
-CREATE OR REPLACE VIEW pool_01."vPoolJobsView"
+CREATE OR REPLACE VIEW pool_01.v_pool_jobs_view
 AS
     WITH stat AS
     (
@@ -142,7 +142,7 @@ AS
 -- =============================================================================
 -- Stored procedures
 --
--- The job procedures all return one row shaped like pool_01."vPoolJobsView".
+-- The job procedures all return one row shaped like pool_01.v_pool_jobs_view.
 -- That is done through this common block of trailing INOUT parameters:
 --
 --   INOUT "jobId" bigint DEFAULT NULL, INOUT "description" varchar DEFAULT NULL,
@@ -195,7 +195,7 @@ BEGIN
          "numTasks", "numTasksFinished", "startTime", "finishTime", "durationSeconds",
          "success", "numTasksSuccess", "finished", "completePct",
          "abortedById", "abortedBy", "abortTime"
-    FROM pool_01."vPoolJobsView" v
+    FROM pool_01.v_pool_jobs_view v
     WHERE v."jobId" = p_job_id;
 
     IF NOT FOUND THEN
@@ -240,7 +240,7 @@ DECLARE
     v_num_tasks integer;
 BEGIN
     SELECT v."numTasks" INTO v_num_tasks
-    FROM pool_01."vPoolJobsView" v
+    FROM pool_01.v_pool_jobs_view v
     WHERE v."jobId" = p_job_id;
 
     IF v_num_tasks IS NOT NULL THEN
@@ -269,7 +269,7 @@ BEGIN
          "numTasks", "numTasksFinished", "startTime", "finishTime", "durationSeconds",
          "success", "numTasksSuccess", "finished", "completePct",
          "abortedById", "abortedBy", "abortTime"
-    FROM pool_01."vPoolJobsView" v
+    FROM pool_01.v_pool_jobs_view v
     WHERE v."jobId" = p_job_id;
 
     IF NOT FOUND THEN
@@ -323,7 +323,7 @@ BEGIN
          "numTasks", "numTasksFinished", "startTime", "finishTime", "durationSeconds",
          "success", "numTasksSuccess", "finished", "completePct",
          "abortedById", "abortedBy", "abortTime"
-    FROM pool_01."vPoolJobsView" v
+    FROM pool_01.v_pool_jobs_view v
     WHERE v."jobId" = v_job_id;
 END;
 $$;
@@ -364,7 +364,7 @@ BEGIN
          "numTasks", "numTasksFinished", "startTime", "finishTime", "durationSeconds",
          "success", "numTasksSuccess", "finished", "completePct",
          "abortedById", "abortedBy", "abortTime"
-    FROM pool_01."vPoolJobsView" v
+    FROM pool_01.v_pool_jobs_view v
     WHERE v."jobId" = p_job_id;
 
     IF NOT FOUND THEN
@@ -412,7 +412,7 @@ BEGIN
          "numTasks", "numTasksFinished", "startTime", "finishTime", "durationSeconds",
          "success", "numTasksSuccess", "finished", "completePct",
          "abortedById", "abortedBy", "abortTime"
-    FROM pool_01."vPoolJobsView" v
+    FROM pool_01.v_pool_jobs_view v
     WHERE v."jobId" = p_job_id;
 
     IF NOT FOUND THEN
@@ -610,7 +610,7 @@ BEGIN
          "numTasks", "numTasksFinished", "startTime", "finishTime", "durationSeconds",
          "success", "numTasksSuccess", "finished", "completePct",
          "abortedById", "abortedBy", "abortTime"
-    FROM pool_01."vPoolJobsView" v
+    FROM pool_01.v_pool_jobs_view v
     WHERE v."jobId" = v_new_job_id;
 END;
 $$;
