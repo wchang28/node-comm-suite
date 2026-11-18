@@ -11,6 +11,7 @@ import { RequestGetSet } from "./request-get-set.js";
 import { router as jobRouter } from './job/index.js';
 import { IDispatcherAbstraction } from './types.js';
 import { ClientConnectionsMonitor } from './client-connections-monitor.js';
+import { MostRecentJobsMonitor } from './most-recent-jobs-monitor.js';
 
 const PORT: number = (process.env.PORT ? parseInt(process.env.PORT) : 8080);
 const HOSTNAME: string = process.env.HOSTNAME || '0.0.0.0';
@@ -92,6 +93,12 @@ const clientConnectionsMonitor = new ClientConnectionsMonitor(
 clientConnectionsMonitor.on("change", () => {
     connectionsMonitorConnectionManager.broadcastNotification("change", clientConnectionsMonitor.toJSON());
 });
+
+const mostRecentJobsMonitor = new MostRecentJobsMonitor(poolDataPlaneDBPool, 300, 500);
+mostRecentJobsMonitor
+.on("change", (jobs) => {
+    recentJobsMonitorConnectionManager.broadcastNotification("change", jobs);
+}).start();
 
 class LocalDispatcherAbstraction implements IDispatcherAbstraction {
     constructor(private _dispatcher: Dispatcher) {
@@ -208,3 +215,19 @@ fetchSelf('/health')
     .then((body) => console.log(`fetchSelf /health:`, JSON.stringify(body)))
     .catch((err) => console.error(`fetchSelf /health failed:`, err));
 */
+
+for (const sig of ['SIGTERM', 'SIGINT'] as const) {
+    process.once(sig, () => {
+        console.log(`${sig} received, shutting down...`);
+        const serverClosedPromise = new Promise<void>((resolve) => {
+            server.close(() => resolve());
+        });
+        const mostRecentJobsMonitorStoppedPromise = mostRecentJobsMonitor.stop();
+        const promises = Promise.all([serverClosedPromise, mostRecentJobsMonitorStoppedPromise]);
+        promises.then(() => {
+            console.log(`Shutdown complete.`);
+            process.exit(0);
+        });
+        setTimeout(() => process.exit(1), 10_000).unref();
+    });
+}
