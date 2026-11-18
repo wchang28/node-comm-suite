@@ -1,18 +1,36 @@
-import express, { Request, Response } from 'express';
+import express, { NextFunction, Request, Response } from 'express';
 import path from 'node:path';
 import morgan from 'morgan';
 import helmet from 'helmet';
 import { access, constants } from 'node:fs/promises';
 import { FileBasedSequenceNumberGenerator } from '../file-based-sequence-number-generator.js';
-
-const sequenceFilePath = path.resolve(process.env.SEQUENCE_FILE ?? 'sequence.txt');
+// environment variables
+// 1. PORT and HOSTNAME
+// 2. SEQUENCE_JSON_FILE
+// 3. AUTH_TOKEN
 const PORT = Number(process.env.PORT ?? 8080);
 const HOSTNAME = process.env.HOSTNAME ?? '0.0.0.0';
 if (!Number.isInteger(PORT) || PORT <= 0 || PORT > 65535) {
     throw new Error(`Invalid PORT: ${process.env.PORT}`);
 }
 
+const sequenceFilePath = path.resolve(process.env.SEQUENCE_JSON_FILE ?? 'counter.json');
 const sequenceGenerator = new FileBasedSequenceNumberGenerator(sequenceFilePath);
+
+const AUTH_TOKEN = process.env.AUTH_TOKEN ?? '';
+
+if (!AUTH_TOKEN) {
+    console.log('Warning: AUTH_TOKEN is not set. Anyone can access the API.');
+}
+
+const authenticateToken = (req: Request, res: Response, next: NextFunction) => {
+    const token = req.query.token as string;
+    if (AUTH_TOKEN && token !== AUTH_TOKEN) {
+        res.status(401).json({ message: 'Unauthorized' });
+        return;
+    }
+    next();
+};
 
 const app = express();
 app.disable('x-powered-by');
@@ -36,14 +54,36 @@ app.get('/health', async (req: Request, res: Response) => {
     }
 });
 
-app.get('/current', async (req: Request, res: Response) => {
-    const currentValue = await sequenceGenerator.current();
-    res.json(currentValue);
+app.use(authenticateToken);
+
+app.get('/', async (req: Request, res: Response) => {
+    const nextValue = await sequenceGenerator.next();
+    res.json(nextValue);
 });
 
 app.get('/next', async (req: Request, res: Response) => {
     const nextValue = await sequenceGenerator.next();
     res.json(nextValue);
+});
+
+app.get('/reset', async (req: Request, res: Response) => {
+    const nextValue = await sequenceGenerator.reset();
+    res.json(nextValue);
+});
+
+app.get('/current', async (req: Request, res: Response) => {
+    const currentValue = await sequenceGenerator.current();
+    res.json(currentValue);
+});
+
+app.get('/set', async (req: Request, res: Response) => {
+    const v = Number(req.query.value);
+    if (!Number.isInteger(v)) {
+        res.status(400).json({ error: 'Invalid value' });
+        return;
+    }
+    const value = await sequenceGenerator.set(v);
+    res.json(value);
 });
 
 const server = app.listen(PORT, HOSTNAME, (err?: Error) => {

@@ -1,36 +1,70 @@
 import { EventEmitter } from "events";
-import { randomUUID } from "crypto";
 
 export type Processor<I, O> = (input: I) => Promise<O>;
 
 interface Job<I, O> {
-    tag: string;
     input: I;
     resolve: (o: O) => void;
     reject: (e: unknown) => void;
 }
 
-export interface SequentialProcessorEvents<O> {
-    "completed": [tag: string, output: O | null, err: unknown];
+interface QueueEvents<I, O> {
+    "enqueue": [Job<I, O>];
+    "dequeue": [Job<I, O>]; 
 }
 
-export class SequentialProcessor<I, O> extends EventEmitter {
-    private queue_: Job<I, O>[] = [];
+class Queue<I, O> extends EventEmitter {
+    private jobs: Job<I, O>[] = [];
+    constructor() {
+        super();
+    }
+    on<K extends keyof QueueEvents<I, O>>(event: K, listener: (...args: QueueEvents<I, O>[K]) => void): this {
+        return super.on(event, listener);
+    }
+    emit<K extends keyof QueueEvents<I, O>>(event: K, ...args: QueueEvents<I, O>[K]): boolean {
+        return super.emit(event, ...args);
+    }
+    enqueue(job: Job<I, O>): void {
+        this.jobs.push(job);
+        this.emit("enqueue", job);
+    }
+    dequeue(): Job<I, O> | undefined {
+        const job = this.jobs.shift();
+        if (job) {
+            this.emit("dequeue", job);
+        }
+        return job;
+    }
+    get length(): number {
+        return this.jobs.length;
+    }
+}
+
+export class SequentialProcessor<I, O> {
+    private queue_: Queue<I, O> = new Queue();
     private processing_ = false;
 
     constructor(private readonly processor_: Processor<I, O>) {
-        super();
-    }
-
-    on<K extends keyof SequentialProcessorEvents<O>>(event: K, listener: (...args: SequentialProcessorEvents<O>[K]) => void): this {
-        return super.on(event, listener);
-    }
-    emit<K extends keyof SequentialProcessorEvents<O>>(event: K, ...args: SequentialProcessorEvents<O>[K]): boolean {
-        return super.emit(event, ...args);
+        this.queue_.on("enqueue", () => {
+            this.drain();
+        });
     }
 
     get processing(): boolean {
         return this.processing_;
+    }
+    set processing(value: boolean) {
+        const oldValue = this.processing_;
+        if (oldValue != value) {
+            this.processing_ = value;
+            const goingFromProcessingToIdle = (oldValue && !value); 
+            if (goingFromProcessingToIdle) {
+                this.drain();
+            }
+        }
+    }
+    get idle(): boolean {
+        return !this.processing_;
     }
     get pending(): number {
         return this.queue_.length;
@@ -38,31 +72,25 @@ export class SequentialProcessor<I, O> extends EventEmitter {
     // Submit a job to the queue and return a promise that resolves with the output or rejects with an error.
     submit(input: I): Promise<O> {
         return new Promise<O>((resolve, reject) => {
-            this.queue_.push({ tag: randomUUID(), input, resolve, reject });
-            this.drain();
+            this.queue_.enqueue({ input, resolve, reject });
         });
     }
-
-    private async drain(): Promise<void> {
-        if (this.processing_) return;
-        this.processing_ = true;
-        try {
-            let job: Job<I, O> | undefined;
-            while ((job = this.queue_.shift())) {
-                let ok = false, output: O | undefined, err: unknown;
-                try {
-                    output = await this.processor_(job.input); // sync throws caught too
-                    ok = true;
-                } catch (e) {
-                    err = e;
-                }
-                if (ok) job.resolve(output as O); else job.reject(err);
-                try {
-                    this.emit("completed", job.tag, ok ? output! : null, ok ? null : err);
-                } catch { /* a listener's exception must not stall the queue */ }
+    private drain() {
+        if (this.idle) {    // if currently idle, start processing the next job in the queue if there is one
+            const job = this.queue_.dequeue();
+            if (job) {  // if there is a job, start processing it
+                this.processing = true; // Idle -> Processing
+                this.processor_(job.input)
+                .then((output) => {
+                    job.resolve(output);
+                })
+                .catch((err) => {
+                    job.reject(err);
+                })
+                .finally(() => {
+                    this.processing = false; // Processing -> Idle
+                });
             }
-        } finally {
-            this.processing_ = false;
         }
     }
 }

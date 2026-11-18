@@ -56,4 +56,4 @@ Thumbs.db
 
 sensitive/
 db-configs*.json
-sequence*.txt
+counter*.json

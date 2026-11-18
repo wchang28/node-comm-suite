@@ -8,9 +8,9 @@ import { DBConfigsFile, toDBConfig } from "../db-types.js";
 import fs from 'node:fs';
 import { createPoolDataPlaneDBPool } from "./db-pools.js";
 import { RequestGetSet } from "./request-get-set.js";
-import {sleep} from "../utils.js";
 import { router as jobRouter } from './job/index.js';
 import { IDispatcherAbstraction } from './types.js';
+import { ClientConnectionsMonitor } from './client-connections-monitor.js';
 
 const PORT: number = (process.env.PORT ? parseInt(process.env.PORT) : 8080);
 const HOSTNAME: string = process.env.HOSTNAME || '0.0.0.0';
@@ -83,6 +83,16 @@ const dispatcherMonitorConnectionManager = new RequestConnectionManager(PING_INT
 const recentJobsMonitorConnectionManager = new RequestConnectionManager(PING_INTERVAL_MS, REQUEST_TIMEOUT_MS);
 const connectionsMonitorConnectionManager = new RequestConnectionManager(PING_INTERVAL_MS, REQUEST_TIMEOUT_MS);
 
+const clientConnectionsMonitor = new ClientConnectionsMonitor(
+    dispatcherMonitorConnectionManager,
+    recentJobsMonitorConnectionManager,
+    connectionsMonitorConnectionManager
+);
+
+clientConnectionsMonitor.on("change", () => {
+    connectionsMonitorConnectionManager.broadcastNotification("change", clientConnectionsMonitor.toJSON());
+});
+
 class LocalDispatcherAbstraction implements IDispatcherAbstraction {
     constructor(private _dispatcher: Dispatcher) {
     }
@@ -94,10 +104,16 @@ class LocalDispatcherAbstraction implements IDispatcherAbstraction {
     }
 }
 
-const authorizationMiddleware = (req: Request, res: Response, next: NextFunction) => {
+const authorizationMiddleware = async (req: Request, res: Response, next: NextFunction) => {
     // Implement your authorization logic here
     const req_gs = new RequestGetSet(req);
     const authHeader = req.headers.authorization || "";
+    function getBearerToken() {
+        if (authHeader.startsWith("Bearer ")) {
+            return authHeader.slice("Bearer ".length);
+        }
+        return null;
+    }
     req_gs.user = {
         id: "00000000-0000-0000-0000-000000000001",
         name: "Test Person"
@@ -140,23 +156,8 @@ app.use('/connections-monitor', connectionsMonitorRouter);
 // SSE endpoint for connections monitor: /connections-monitor/events
 connectionsMonitorConnectionManager.setupExpressRouter(connectionsMonitorRouter, "/events");
 
-app.get("/connections", (req: Request, res: Response) => {
-    const req_gs = new RequestGetSet(req);
-    let connectionLists = dispatcherMonitorConnectionManager.connectionLists;
-    let monitorType = "dispatcher";
-    for (const connection of connectionLists) {
-        const req_gs = new RequestGetSet(connection.req);
-        const user = req_gs.user;
-    }
-    connectionLists = recentJobsMonitorConnectionManager.connectionLists
-    monitorType = "recent-jobs";
-    for (const connection of connectionLists) {
-        const req_gs = new RequestGetSet(connection.req);
-        const connId = connection.connId;
-        const remoteAddress = connection.remoteSocketAddress;
-        const user = req_gs.user;
-    }
-    res.sendStatus(200);
+app.get("/client-connections", (req: Request, res: Response) => {
+    res.json(clientConnectionsMonitor.toJSON());
 });
 
 app.use('/job', jobRouter);
