@@ -1,7 +1,8 @@
 import {Client} from "../../sse-request/client.js";
 
-const client = new Client("http://0.0.0.0:8080/connections-monitor/events");
+const EVENT_URL = process.env.EVENT_URL || "http://localhost:8080/connections-monitor/events";
 
+const client = new Client(EVENT_URL);
 client.on("ready", () => {
     console.log("Client is ready");
 }).on("connection-id", (connId) => {
@@ -13,6 +14,4 @@ client.on("ready", () => {
     console.table(data);
 }).on("ping", (timestamp) => {
     console.log("Ping received at:", timestamp);
-});
-
-client.connect();
+}).connect();

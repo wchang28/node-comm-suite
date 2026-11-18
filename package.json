@@ -13,6 +13,7 @@
     "test-sse-server": "node dist/sse-request/server-test.js",
     "test-dispatcher": "node dist/batch/dispatcher/app.js",
     "test-task-launcher": "node dist/batch/task-launcher/app.js",
+    "test-batch-dispatcher-monitor-client": "node dist/batch/client-test/dispatcher-monitor-app.js",
     "test-batch-recent-jobs-monitor-client": "node dist/batch/client-test/recent-jobs-monitor-app.js",
     "test-batch-conns-monitor-client": "node dist/batch/client-test/conns-monitor-app.js",
     "test-spawn": "node dist/test-spawn.js",
