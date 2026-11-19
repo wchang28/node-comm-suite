@@ -54,4 +54,10 @@ export class FileBasedSequenceNumberGenerator {
     async set(value: number): Promise<number> {
         return this.processor_.submit({ operation: "set", value });
     }
+    get idle(): boolean {
+        return this.processor_.idle;
+    }
+    get pending(): number {
+        return this.processor_.pending;
+    }
 }

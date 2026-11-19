@@ -86,6 +86,12 @@ app.get('/set', async (req: Request, res: Response) => {
     res.json(value);
 });
 
+app.get("/status", async (req: Request, res: Response) => {
+    const idle = sequenceGenerator.idle;
+    const pending = sequenceGenerator.pending;
+    res.json({ idle, pending });
+});
+
 const server = app.listen(PORT, HOSTNAME, (err?: Error) => {
     if (err) {
         console.error('Failed to start server:', err);
