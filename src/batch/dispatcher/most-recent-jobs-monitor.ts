@@ -1,4 +1,4 @@
-import EventEmitter from 'events';
+import EventEmitter from 'node:events';
 import {IPoolDataPlaneDBPool} from './db-pools.js';
 import {Pooling} from '../../pooling.js';
 import type {Job} from '../types.js';
@@ -9,7 +9,25 @@ export interface MostRecentJobsMonitorEvents {
     "change": (jobs: Job[]) => void;
 }
 
-export class MostRecentJobsMonitor extends EventEmitter {
+export interface IMostRecentJobsMonitor {
+    on<U extends keyof MostRecentJobsMonitorEvents>(
+        event: U, listener: MostRecentJobsMonitorEvents[U]
+    ): this;
+    off<U extends keyof MostRecentJobsMonitorEvents>(
+        event: U, listener: MostRecentJobsMonitorEvents[U]
+    ): this;
+    emit<U extends keyof MostRecentJobsMonitorEvents>(
+        event: U, ...args: Parameters<MostRecentJobsMonitorEvents[U]>
+    ): boolean;
+    once<U extends keyof MostRecentJobsMonitorEvents>(
+        event: U, listener: MostRecentJobsMonitorEvents[U]
+    ): this;
+    start(): void;
+    stop(): Promise<void>;
+    readonly mostRecentJobs: Job[];
+}
+
+export class MostRecentJobsMonitor extends EventEmitter implements IMostRecentJobsMonitor {
     private readonly pooling_: Pooling<Job[]>;
     private currentJSON: string;
     constructor(dbPool: IPoolDataPlaneDBPool, limit: number = 300, poolingIntervalMS: number = 500) {

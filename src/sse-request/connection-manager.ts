@@ -1,4 +1,4 @@
-import { EventEmitter } from 'events';
+import { EventEmitter } from 'node:events';
 import express, { Request, Response, Router } from 'express';
 import {generateSecureToken, error_message} from './utils.js';
 import assert from 'assert';
