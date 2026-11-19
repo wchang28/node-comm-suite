@@ -1,5 +1,5 @@
 import {SequentialProcessor} from "./sequential-processor.js";
-import fs from "node:fs";
+import {readFile, writeFile} from "node:fs/promises";
 
 const MIN_INT = 0;
 const MAX_INT = 2147483647; // max INT type value for SQL
@@ -10,16 +10,18 @@ interface OperationRequest {
     value?: number;
 }
 
+// A file-based sequence number generator that ensures sequential access to the sequence number.
 export class FileBasedSequenceNumberGenerator {
     private readonly processor_: SequentialProcessor<OperationRequest, number>;
-    private readCurrentValue(): Promise<number> {
-        const content = fs.readFileSync(this.filePath, "utf-8");
+    // Reads the current value from the file.
+    private async readCurrentValue() {
+        const content = await readFile(this.filePath, "utf-8");
         const currentValue = parseInt(content, 10);
-        return Promise.resolve(isNaN(currentValue) ? MIN_INT : currentValue);
+        return (isNaN(currentValue) ? MIN_INT: currentValue);
     }
-    private writeCurrentValue(currentValue: number): Promise<void> {
-        fs.writeFileSync(this.filePath, currentValue.toString(), "utf-8");
-        return Promise.resolve();
+    // Writes the current value to the file.
+    private async writeCurrentValue(currentValue: number) {
+        await writeFile(this.filePath, currentValue.toString(), "utf-8");
     }
     constructor(public filePath: string) {
         this.processor_ = new SequentialProcessor(async (input: OperationRequest) => {
@@ -42,21 +44,27 @@ export class FileBasedSequenceNumberGenerator {
             }
         });
     }
-    async current(): Promise<number> {
+    // Returns the current value without modifying it.
+    async current() {
         return this.readCurrentValue();
     }
-    async next(): Promise<number> {
+    // Returns the next value and increments the sequence.
+    async next() {
         return this.processor_.submit({ operation: "next" });
     }
-    async reset(): Promise<number> {
+    // Resets the sequence to the minimum value.
+    async reset() {
         return this.processor_.submit({ operation: "reset" });
     }
-    async set(value: number): Promise<number> {
+    // Sets the sequence to the specified value.
+    async set(value: number) {
         return this.processor_.submit({ operation: "set", value });
     }
+    // Returns whether the processor is idle.
     get idle(): boolean {
         return this.processor_.idle;
     }
+    // Returns the number of pending operations in the processor.
     get pending(): number {
         return this.processor_.pending;
     }

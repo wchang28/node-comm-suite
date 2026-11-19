@@ -87,9 +87,10 @@ app.get('/set', async (req: Request, res: Response) => {
 });
 
 app.get("/status", async (req: Request, res: Response) => {
+    const current = await sequenceGenerator.current();
     const idle = sequenceGenerator.idle;
     const pending = sequenceGenerator.pending;
-    res.json({ idle, pending });
+    res.json({ current, idle, pending });
 });
 
 const server = app.listen(PORT, HOSTNAME, (err?: Error) => {
