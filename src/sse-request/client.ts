@@ -1,4 +1,5 @@
-import { EventEmitter } from 'node:events';
+//import { EventEmitter } from 'node:events';
+import { EventEmitter } from '../browser-compatible/events.js';
 import {createEventSource, EventSourceClient} from 'eventsource-client';
 import {
     ConnectionId,

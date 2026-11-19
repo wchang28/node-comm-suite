@@ -1,12 +1,15 @@
-import assert from 'assert';
-
 /**
  * Generates a random integer between 0 and N (inclusive).
  * @param n - The maximum integer value (must be >= 0).
  * @returns A random integer from [0, n].
  */
 export function getRandomInt(n: number): number {
-    assert(n >= 0, 'n must be a non-negative integer');
+    if (!Number.isInteger(n)) {
+        throw new Error('n must be an integer');
+    }
+    if (n < 0) {
+        throw new Error('n must be a non-negative integer');
+    }
     // Multiply by (n + 1) to make the range inclusive of n
     return Math.floor(Math.random() * (n + 1));
 }
