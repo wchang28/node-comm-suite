@@ -75,6 +75,12 @@ nodesTracker.on("node-added", (node) => {
     console.log(`Node ${node.hostname} (ID: ${node.id}) <<task-finished-on-node>>:`, JSON.stringify(payload));
 });
 
+const tasksQueue = dispatcher.queue;
+
+tasksQueue.on("change", () => {
+    
+});
+
 const taskLauncherRouter = express.Router();
 app.use('/task-launcher', taskLauncherRouter);
 // SSE endpoint for task launcher: /task-launcher/events
