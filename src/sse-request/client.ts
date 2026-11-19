@@ -14,7 +14,6 @@ import {
     SSEResponseMsg,
     NotifyPayload
 } from './types.js';
-import assert from 'assert';
 import {error_message} from './utils.js';
 
 export type ClientState = "disconnected" | "connected" | "ready";
@@ -68,7 +67,9 @@ class ReadyTracker extends EventEmitter {
         }
     }
     onReceiveConnectionId(connId: ConnectionId): void {
-        assert(connId, "Connection id should be non-empty");
+        if (!connId) {
+            throw new Error("Connection id should be non-empty");
+        }
         if (this.state === "connected") {
             this._connId = connId;
             this.emit("ready");
@@ -118,7 +119,9 @@ export class Client extends EventEmitter {
     private _eventSource: EventSourceClient | null = null;
     constructor(private sseUrl: string, private _requestProcessor: RequestProcessor = defaultRequestProcessor) {
         super();
-        assert(sseUrl, "SSE URL should be non-empty");
+        if (!sseUrl) {
+            throw new Error("SSE URL should be non-empty");
+        }
         this.initReadyTracker();
         this._readyPromise = this.createReadyPromise();
     }
