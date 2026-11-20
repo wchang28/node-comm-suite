@@ -1,6 +1,6 @@
 import {Client} from "../../sse-request/client.js";
 
-const EVENT_URL = process.env.EVENT_URL || "http://localhost:8080/connections-monitor/events";
+const EVENT_URL = process.env.EVENT_URL || "http://localhost:8080/client-connections/events";
 
 const client = new Client(EVENT_URL);
 client.on("ready", () => {
