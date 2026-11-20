@@ -8,6 +8,7 @@ import { DBConfigsFile, toDBConfig } from "../../db-types.js";
 import fs from 'node:fs';
 import { createPoolDataPlaneDBPool } from "./db-pools.js";
 import { RequestGetSet } from "./request-get-set.js";
+import { router as dispatcherRouter } from './dispatcher/index.js';
 import { router as jobRouter } from './job/index.js';
 import { IDispatcherAbstraction } from './types.js';
 import { ClientConnectionsMonitor } from './client-connections-monitor.js';
@@ -111,18 +112,43 @@ clientConnectionsMonitor.on("change", () => {
 
 const mostRecentJobsMonitor = new MostRecentJobsMonitor(poolDataPlaneDBPool, 300, 500);
 mostRecentJobsMonitor
-.on("change", (jobs) => {
-    recentJobsMonitorConnectionManager.broadcastNotification("change", jobs);
+.on("change", () => {
+    recentJobsMonitorConnectionManager.broadcastNotification("change", mostRecentJobsMonitor.toJSON());
 }).start();
 
 class LocalDispatcherAbstraction implements IDispatcherAbstraction {
     constructor(private _dispatcher: Dispatcher) {
+    }
+    async enable(): Promise<boolean> {
+        this._dispatcher.enabled = true;
+        return this._dispatcher.enabled;
+    }
+    async disable(): Promise<boolean> {
+        this._dispatcher.enabled = false;
+        return this._dispatcher.enabled;
+    }
+    async isEnabled(): Promise<boolean> {
+        return this._dispatcher.enabled;
+    }
+    async closeQueue(): Promise<boolean> {
+        this._dispatcher.queue.closed = true;
+        return this._dispatcher.queue.closed;
+    }
+    async openQueue(): Promise<boolean> {
+        this._dispatcher.queue.closed = false;
+        return this._dispatcher.queue.closed;
+    }
+    async isQueueClosed(): Promise<boolean> {
+        return this._dispatcher.queue.closed;
     }
     async queueJob(jobId: JobId, numTasks: number){
         this._dispatcher.queue.queueJob(jobId, numTasks);
     }
     async killJob(jobId: JobId) {
         await this._dispatcher.killJob(jobId);
+    }
+    async toJSON(): Promise<any> {
+        return this._dispatcher.toJSON();
     }
 }
 
@@ -163,24 +189,25 @@ app.get("/me", (req: Request, res: Response) => {
     res.json(req_gs.user);
 });
 
-const dispatcherMonitorRouter = express.Router();
-app.use('/dispatcher-monitor', dispatcherMonitorRouter);
-// SSE endpoint for dispatcher monitor: /dispatcher-monitor/events
-dispatcherMonitorConnectionManager.setupExpressRouter(dispatcherMonitorRouter, "/events");
+app.use('/dispatcher', dispatcherRouter);
+// SSE endpoint for dispatcher monitor: /dispatcher/events
+dispatcherMonitorConnectionManager.setupExpressRouter(dispatcherRouter, "/events");
 
-const recentJobsMonitorRouter = express.Router();
-app.use('/recent-jobs-monitor', recentJobsMonitorRouter);
-// SSE endpoint for recent jobs monitor: /recent-jobs-monitor/events
-recentJobsMonitorConnectionManager.setupExpressRouter(recentJobsMonitorRouter, "/events");
+const recentJobsRouter = express.Router();
+app.use('/recent-jobs', recentJobsRouter);
+recentJobsRouter.get("/", (req: Request, res: Response) => {
+    res.json(mostRecentJobsMonitor.toJSON());
+});
+// SSE endpoint for recent jobs monitor: /recent-jobs/events
+recentJobsMonitorConnectionManager.setupExpressRouter(recentJobsRouter, "/events");
 
-const connectionsMonitorRouter = express.Router();
-app.use('/connections-monitor', connectionsMonitorRouter);
-// SSE endpoint for connections monitor: /connections-monitor/events
-connectionsMonitorConnectionManager.setupExpressRouter(connectionsMonitorRouter, "/events");
-
-app.get("/client-connections", (req: Request, res: Response) => {
+const clientConnectionsRouter = express.Router();
+app.use('/client-connections', clientConnectionsRouter);
+clientConnectionsRouter.get("/", (req: Request, res: Response) => {
     res.json(clientConnectionsMonitor.toJSON());
 });
+// SSE endpoint for connections monitor: /client-connections/events
+connectionsMonitorConnectionManager.setupExpressRouter(clientConnectionsRouter, "/events");
 
 app.use('/job', jobRouter);
 
@@ -188,9 +215,9 @@ app.use('/job', jobRouter);
 const server = app.listen(PORT, HOSTNAME, () => {
     console.log(`SSE Server running on http://${HOSTNAME}:${PORT}`);
     console.log(`Task launcher SSE endpoint: http://${HOSTNAME}:${PORT}/task-launcher/events`);
-    console.log(`Dispatcher monitor SSE endpoint: http://${HOSTNAME}:${PORT}/dispatcher-monitor/events`);
-    console.log(`Recent jobs monitor SSE endpoint: http://${HOSTNAME}:${PORT}/recent-jobs-monitor/events`);
-    console.log(`Connections monitor SSE endpoint: http://${HOSTNAME}:${PORT}/connections-monitor/events`);
+    console.log(`Dispatcher monitor SSE endpoint: http://${HOSTNAME}:${PORT}/dispatcher/events`);
+    console.log(`Recent jobs monitor SSE endpoint: http://${HOSTNAME}:${PORT}/recent-jobs/events`);
+    console.log(`Connections monitor SSE endpoint: http://${HOSTNAME}:${PORT}/client-connections/events`);
     console.log(`Health check: http://${HOSTNAME}:${PORT}/health`);
 });
 

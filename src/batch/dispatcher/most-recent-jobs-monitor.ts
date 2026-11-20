@@ -5,8 +5,8 @@ import type {Job} from '../types.js';
 
 export interface MostRecentJobsMonitorEvents {
     "pooled": (result: Job[]) => void;
-    "error": (error: any) => void;
-    "change": (jobs: Job[]) => void;
+    "pooling-error": (error: any) => void;
+    "change": () => void;
 }
 
 export interface IMostRecentJobsMonitor {
@@ -24,7 +24,7 @@ export interface IMostRecentJobsMonitor {
     ): this;
     start(): void;
     stop(): Promise<void>;
-    readonly mostRecentJobs: Job[];
+    toJSON(): Job[];
 }
 
 export class MostRecentJobsMonitor extends EventEmitter implements IMostRecentJobsMonitor {
@@ -37,14 +37,14 @@ export class MostRecentJobsMonitor extends EventEmitter implements IMostRecentJo
         pooling.on("callback-returned", (result, error) => {
             if (!error) {
                 const jobs: Job[] = result;
-                this.emit("pooled", jobs);
+                this.safeEmit("pooled", jobs);
                 const updatedJSON = JSON.stringify(jobs);
                 if (updatedJSON != this.currentJSON) {
                     this.currentJSON = updatedJSON;
-                    this.emit("change", jobs);
+                    this.safeEmit("change");
                 }
             } else {
-                this.emit("error", error);
+                this.safeEmit("pooling-error", error);
             }
         });
         this.pooling_ = pooling;
@@ -69,13 +69,22 @@ export class MostRecentJobsMonitor extends EventEmitter implements IMostRecentJo
     ): this {
         return super.once(event, listener);
     }
+    private safeEmit<U extends keyof MostRecentJobsMonitorEvents>(
+        event: U, ...args: Parameters<MostRecentJobsMonitorEvents[U]>
+    ): void {
+        try {
+            this.emit(event, ...args);
+        } catch (err) {
+            console.error(`MostRecentJobsMonitor "${event}" listener threw:`, err);
+        }
+    }
     start() {
         this.pooling_.start();
     }
     async stop() {
         await this.pooling_.stop();
     }
-    get mostRecentJobs(): Job[] {
+    toJSON(): Job[] {
         return JSON.parse(this.currentJSON) as Job[];
     }
 }
