@@ -1,4 +1,4 @@
-import { EventEmitter } from 'events';
+import { EventEmitter } from 'node:events';
 import assert from 'assert';
 import { getRandomInt } from '../../utils.js';
 import {JobId, TaskIndex, TaskItems} from "../types.js";

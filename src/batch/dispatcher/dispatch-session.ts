@@ -1,4 +1,4 @@
-import { EventEmitter } from 'events';
+import { EventEmitter } from 'node:events';
 import {
     JobId,
     TaskIndex,
@@ -14,7 +14,6 @@ import {
 import {getRandomInt, generateGuid, error_message} from '../../utils.js';
 import {RequestError as SSERequestError, ConnectionManagerError} from "../../sse-request/types.js";
 import assert from 'assert';
-import { DispatcherEvents } from './dispatcher.js';
 
 export type TaskDispatchError = TaskLauncherAckError | SSERequestError | ConnectionManagerError;
 

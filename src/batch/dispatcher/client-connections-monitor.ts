@@ -1,4 +1,4 @@
-import { EventEmitter } from "events";
+import { EventEmitter } from "node:events";
 import {ConnectionManager} from "../../sse-request/connection-manager.js";
 import type {ConnectionId} from "../../sse-request/types.js";
 import {RequestGetSet}  from "./request-get-set.js";

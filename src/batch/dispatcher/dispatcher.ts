@@ -1,4 +1,4 @@
-import { EventEmitter } from 'events';
+import { EventEmitter } from 'node:events';
 import { ConnectionManager } from '../../sse-request/connection-manager.js';
 import { Queue, QueueJSON } from './queue.js';
 import { Node, NodesTracker } from './nodes.js'
