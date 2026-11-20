@@ -34,9 +34,12 @@ export class FileBasedSequenceNumberGenerator {
     }
     // Writes the current value to the file.
     private async writeCurrentValue(currentValue: number) {
+        /*
         const tmp = `${this.filePath}.tmp`;
         await writeFile(tmp, currentValue.toString(), "utf-8");
         await rename(tmp, this.filePath);   // atomic replace
+        */
+        await writeFile(this.filePath, currentValue.toString(), "utf-8");
     }
     constructor(public filePath: string) {
         this.processor_ = new SequentialProcessor<OperationRequest, number>(async (input: OperationRequest) => {
