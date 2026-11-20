@@ -14,7 +14,7 @@ export interface ClientConnectionItem {
 }
 
 export interface ClientConnectionsMonitorEvents {
-    "change": [];
+    "change": () => void;
 }
 
 export class ClientConnectionsMonitor extends EventEmitter {
@@ -24,21 +24,42 @@ export class ClientConnectionsMonitor extends EventEmitter {
         private connectionsMonitorConnectionManager: ConnectionManager
     ) {
         super();
-        dispatcherMonitorConnectionManager.on("change", () => this.emit("change"));
-        recentJobsMonitorConnectionManager.on("change", () => this.emit("change"));
-        connectionsMonitorConnectionManager.on("change", () => this.emit("change"));
+        dispatcherMonitorConnectionManager.on("change", () => this.safeEmit("change"));
+        recentJobsMonitorConnectionManager.on("change", () => this.safeEmit("change"));
+        connectionsMonitorConnectionManager.on("change", () => this.safeEmit("change"));
     }
     on<K extends keyof ClientConnectionsMonitorEvents>(
         event: K,
-        listener: (...args: ClientConnectionsMonitorEvents[K]) => void
+        listener: ClientConnectionsMonitorEvents[K]
     ): this {
         return super.on(event, listener);
     }
+    off<K extends keyof ClientConnectionsMonitorEvents>(
+        event: K,
+        listener: ClientConnectionsMonitorEvents[K]
+    ): this {
+        return super.off(event, listener);
+    }
     emit<K extends keyof ClientConnectionsMonitorEvents>(
         event: K,
-        ...args: ClientConnectionsMonitorEvents[K]
+        ...args: Parameters<ClientConnectionsMonitorEvents[K]>
     ): boolean {
         return super.emit(event, ...args);
+    }
+    once<K extends keyof ClientConnectionsMonitorEvents>(
+        event: K,
+        listener: ClientConnectionsMonitorEvents[K]
+    ): this {
+        return super.once(event, listener);
+    }
+    private safeEmit<K extends keyof ClientConnectionsMonitorEvents>(
+        event: K, ...args: Parameters<ClientConnectionsMonitorEvents[K]>
+    ): void {
+        try {
+            this.emit(event, ...args);
+        } catch (err) {
+            console.error(`ClientConnectionsMonitor "${event}" listener threw:`, err);
+        }
     }
     private getMonitorConnectionItems(
         topic: MonitoringTopic,
