@@ -14,6 +14,7 @@ import {
 import {getRandomInt, generateGuid, error_message} from '../../utils.js';
 import {RequestError as SSERequestError, ConnectionManagerError} from "../../sse-request/types.js";
 import assert from 'assert';
+import { DispatcherEvents } from './dispatcher.js';
 
 export type TaskDispatchError = TaskLauncherAckError | SSERequestError | ConnectionManagerError;
 
@@ -71,17 +72,17 @@ export class DispatchSession extends EventEmitter {
         row.durationMS = row.endTime - row.startTime;
         row.pid = pid;
         row.error = error || null;
-        this.emit("one-task-dispatched", row);   
+        this.safeEmit("one-task-dispatched", row);   
         const json = this._dispatchSessionJSON;
         json.numCompleted++;
         if (json.numCompleted === json.numTasks) {
             json.endTime = Date.now();
             json.durationMS = json.endTime - json.startTime;
             json.completed = true;
-            this.emit("session-completed", json);
+            this.safeEmit("session-completed", json);
             sessionCompleteResolve(errors); // call the session completion resolver to resolve the session completion promise
         }
-        this.emit("change");
+        this.safeEmit("change");
     }
     // call this function to start dispatching tasks to nodes
     dispatch(usableCPUs: CPUs, tasks: TaskItems) {
@@ -100,7 +101,7 @@ export class DispatchSession extends EventEmitter {
                 const taskItem = tasks[i];
                 const {j, t} = taskItem;
                 const indexPicked = getRandomInt(cpus.length - 1);
-                const nodeId = cpus[indexPicked];
+                const nodeId = cpus[indexPicked];   // node picked
                 cpus.splice(indexPicked, 1);
                 cpusUsage[nodeId] = (cpusUsage[nodeId] || 0) + 1;   // increase CPU usage on the node
                 me._dispatchSessionJSON.rows[i] = {
@@ -113,8 +114,8 @@ export class DispatchSession extends EventEmitter {
                     pid: null,
                     error: null
                 };
-                me.emit("change");
-                me.emit("node-to-be-dispatched-one-task", nodeId, taskItem);
+                me.safeEmit("change");
+                me.safeEmit("node-to-be-dispatched-one-task", nodeId, taskItem);
                 const row = me._dispatchSessionJSON.rows[i];
                 me._dispatcher.dispatchTaskToNode(nodeId, taskItem)
                 .then((pid) => {
@@ -126,7 +127,7 @@ export class DispatchSession extends EventEmitter {
                 });
             }
             assert(cpus.length >= 0, 'leftover usable CPUs should be >= 0');  // leftover usable CPUs should be >= 0
-            me.emit("cpus-usage-assignment", cpusUsage);
+            me.safeEmit("cpus-usage-assignment", cpusUsage);
         });
         return completionPromise;
     }
@@ -177,5 +178,14 @@ export class DispatchSession extends EventEmitter {
         ...args: Parameters<DispatchSessionEvents[K]>
     ): boolean {
         return super.emit(event, ...args);
+    }
+    private safeEmit<U extends keyof DispatchSessionEvents>(
+        event: U, ...args: Parameters<DispatchSessionEvents[U]>
+    ): void {
+        try {
+            this.emit(event, ...args);
+        } catch (err) {
+            console.error(`Dispatcher "${event}" listener threw:`, err);
+        }
     }
 }
