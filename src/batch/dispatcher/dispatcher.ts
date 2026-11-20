@@ -2,8 +2,8 @@ import { EventEmitter } from 'events';
 import { ConnectionManager } from '../../sse-request/connection-manager.js';
 import { Queue, QueueJSON } from './queue.js';
 import { Node, NodesTracker } from './nodes.js'
-import { DispatchSession, DispatchResultRow, DispatchSessionJSON } from './dispatch-session.js';
-import { JobId, NodeIdentifyInfo, NodeInfoRow } from '../types.js';
+import { DispatchSession, DispatchResultRow } from './dispatch-session.js';
+import { JobId, NodeIdentifyInfo, NodeInfoRow, NodeId, TaskItem } from '../types.js';
 import { NodesJobKiller, JobKillStatRow } from './nodes-job-killer.js';
 
 export interface DispatcherEvents {
@@ -11,6 +11,7 @@ export interface DispatcherEvents {
     "disabled": () => void;
     "dispatching": (sessionId: string) => void;
     "dispatch-completed": (dispatchSession: DispatchSession) => void;
+    "node-to-be-dispatched-one-task": (nodeId: NodeId, taskItem: TaskItem) => void;
     "one-task-dispatched": (resultRow: DispatchResultRow) => void;
 }
 
@@ -72,8 +73,8 @@ export class Dispatcher extends EventEmitter {
     get idle(): boolean {
         return (this._currentDispatchSession === null);
     }
-    // Wait until the dispatcher becomes idle (no current dispatch session)
-    async waitForIdle() {
+    // await for the dispatcher becomes idle (no current dispatch session)
+    async forIdle() {
         let idlePromise: Promise<void> = Promise.resolve();
         if (this._currentDispatchSession !== null) {    // currenly dispatching tasks
             const dispatchSession = this._currentDispatchSession;
@@ -88,11 +89,11 @@ export class Dispatcher extends EventEmitter {
     private set currentDispatchingSession(session: DispatchSession | null) {
         if (this._currentDispatchSession == null && session !== null) { // Idle -> Dispatching
             this._currentDispatchSession = session;
-            this.emit('dispatching', session.sessionId);
+            this.safeEmit('dispatching', session.sessionId);
         } else if (this._currentDispatchSession !== null && session === null) { // Dispatching -> Idle
             const oldSession = this._currentDispatchSession;
             this._currentDispatchSession = null;
-            this.emit('dispatch-completed', oldSession);
+            this.safeEmit('dispatch-completed', oldSession);
         }
     }
     private async dispatchTasksIfNecessary() {
@@ -101,15 +102,22 @@ export class Dispatcher extends EventEmitter {
             if (usableCpus.length > 0) {
                 const tasks = this.queue.dequeueTasks(usableCpus.length);
                 const dispatchSession = new DispatchSession(this.nodesTracker);
-                const me = this;
-                dispatchSession.on("cpus-usage-assignment", (cpusUsage) => {
-                    me.nodesTracker.increaseCPUUsageOnNodes(cpusUsage); // increase CPU usage on nodes based on the dispatch assignments by assuming every task dispatch to the node is successful.
-                }).on("one-task-dispatched", (row) => {
-                    me.emit("one-task-dispatched", row);
-                });
+                const nodeToBeDispatchedOneTaskListener = (nodeId: NodeId, taskItem: TaskItem) => {
+                    this.safeEmit("node-to-be-dispatched-one-task", nodeId, taskItem);
+                };
+                const oneTaskDispatchedListener = (row: DispatchResultRow) => {
+                    this.safeEmit("one-task-dispatched", row);
+                };
+                dispatchSession.once("cpus-usage-assignment", (cpusUsage) => {
+                    this.nodesTracker.increaseCPUUsageOnNodes(cpusUsage); // increase CPU usage on nodes based on the dispatch assignments by assuming every task dispatch to the node is successful.
+                })
+                .on("node-to-be-dispatched-one-task", nodeToBeDispatchedOneTaskListener)
+                .on("one-task-dispatched", oneTaskDispatchedListener)
+                ;
                 this.currentDispatchingSession = dispatchSession;   // mark the start of a dispatch session
                 const errors = await dispatchSession.dispatch(usableCpus, tasks);
-                dispatchSession.removeAllListeners();
+                dispatchSession.off("node-to-be-dispatched-one-task", nodeToBeDispatchedOneTaskListener);
+                dispatchSession.off("one-task-dispatched", oneTaskDispatchedListener);
                 this.nodesTracker.decreaseCPUUsageOnNodes(errors);  // for nodes where task dispatch failed, decrease/release the CPU usage accordingly
                 this.currentDispatchingSession = null;   // mark the end of a dispatch session
             }

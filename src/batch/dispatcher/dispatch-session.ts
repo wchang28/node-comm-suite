@@ -42,11 +42,11 @@ export interface DispatchSessionJSON {
 }
 
 export interface DispatchSessionEvents {
-    "node-to-be-dispatched-one-task": [nodeId: NodeId, taskItem: TaskItem];
-    "cpus-usage-assignment": [cpusUsage: CPUUsageByNode];
-    "one-task-dispatched": [row: DispatchResultRow];
-    "session-completed": [sessionJSON: DispatchSessionJSON];
-    "change": [];
+    "node-to-be-dispatched-one-task": (nodeId: NodeId, taskItem: TaskItem) => void;
+    "cpus-usage-assignment": (cpusUsage: CPUUsageByNode) => void;   // emitted only once when the CPU usage is assigned at the start of the dispatch session
+    "one-task-dispatched": (row: DispatchResultRow) => void;
+    "session-completed": (sessionJSON: DispatchSessionJSON) => void;    // emitted only once when the dispatch session is completed
+    "change": () => void;
 }
 
 export class DispatchSession extends EventEmitter {
@@ -84,7 +84,7 @@ export class DispatchSession extends EventEmitter {
         this.emit("change");
     }
     // call this function to start dispatching tasks to nodes
-    async dispatch(usableCPUs: CPUs, tasks: TaskItems) {
+    dispatch(usableCPUs: CPUs, tasks: TaskItems) {
         assert(tasks !== null && tasks != undefined && tasks.length > 0, 'No tasks to dispatch');
         assert(usableCPUs.length > 0, 'No usable CPUs to dispatch tasks to');
         assert(tasks.length <= usableCPUs.length, 'More tasks to dispatch than usable CPUs');
@@ -156,19 +156,25 @@ export class DispatchSession extends EventEmitter {
     }
     on<K extends keyof DispatchSessionEvents>(
         event: K,
-        listener: (...args: DispatchSessionEvents[K]) => void
+        listener: DispatchSessionEvents[K]
     ): this {
         return super.on(event, listener);
     }
+    off<K extends keyof DispatchSessionEvents>(
+        event: K,
+        listener: DispatchSessionEvents[K]
+    ): this {
+        return super.off(event, listener);
+    }
     once<K extends keyof DispatchSessionEvents>(
         event: K,
-        listener: (...args: DispatchSessionEvents[K]) => void
+        listener: DispatchSessionEvents[K]
     ): this {
         return super.once(event, listener);
     }
     emit<K extends keyof DispatchSessionEvents>(
         event: K,
-        ...args: DispatchSessionEvents[K]
+        ...args: Parameters<DispatchSessionEvents[K]>
     ): boolean {
         return super.emit(event, ...args);
     }
