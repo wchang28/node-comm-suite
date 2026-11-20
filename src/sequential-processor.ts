@@ -174,7 +174,7 @@ export class SequentialProcessor<I, O> extends EventEmitter {
         return this.queue_.jobs.map(job => job.input);
     }
     // Returns a summary of all jobs, including the currently processing job and queued jobs.
-    get jobSummary(): JobSummaryRow<I>[] {
+    toJSON(): JobSummaryRow<I>[] {
         const rows: JobSummaryRow<I>[] = this.queue_.jobs.map(job => ({ input: job.input, state: "queued" }));
         if (this.processingJob_) {  // if there is a job currently being processed, add it to the summary as "processing"
             rows.unshift({ input: this.processingJob_.input, state: "processing" });    // add the currently processing job at the beginning of the summary

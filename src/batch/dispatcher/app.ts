@@ -56,12 +56,10 @@ dispatcher.on("dispatching", (sessionId) => {
     console.log(`Dispatcher <<dispatch-completed>>:`, JSON.stringify(dispatchSession.toJSON()));
 }).on("one-task-dispatched", (row) => {
     console.log(`Dispatcher <<one-task-dispatched>>:`, JSON.stringify(row));
-}).on("killing-job", (jobId) => {
-    console.log(`Dispatcher <<killing-job>>: jobId=${jobId}`);
-}).on("job-kill-completed", (jobId) => {
-    console.log(`Dispatcher <<job-kill-completed>>: jobId=${jobId}`);
-}).on("job-kill-retry", (jobId, retryIndex, numProcessKilled) => {
-    console.log(`Dispatcher <<job-kill-retry>>: jobId=${jobId}, retryIndex=${retryIndex}, numProcessKilled=${numProcessKilled}`);
+}).on("enabled", () => {
+    console.log(`Dispatcher <<enabled>>`);
+}).on("disabled", () => {
+    console.log(`Dispatcher <<disabled>>`);
 });
 
 const nodesTracker = dispatcher.nodesTracker;
@@ -73,6 +71,17 @@ nodesTracker.on("node-added", (node) => {
     console.log(`NodesTracker <<changed>>. Current nodes: ${nodesTracker.numNodes}, Usable CPUs: ${nodesTracker.numUsableCpus}`);
 }).on("task-finished-on-node", (node, payload) => {
     console.log(`Node ${node.hostname} (ID: ${node.id}) <<task-finished-on-node>>:`, JSON.stringify(payload));
+});
+
+const jobKiller = dispatcher.nodesJobKiller;
+jobKiller.on("killing", (jobId) => {
+    console.log(`<<killing-job>>: jobId=${jobId}`);
+}).on("killed", (jobId) => {
+    console.log(`<<job-killed>>: jobId=${jobId}`);
+}).on("kill-retry", (jobId, retryIndex, numProcessKilled) => {
+    console.log(`<<job-kill-retry>>: jobId=${jobId}, retryIndex=${retryIndex}, numProcessKilled=${numProcessKilled}`);
+}).on("change", () => {
+    console.log(`JobKiller <<change>>:`, JSON.stringify(jobKiller.toJSON()));
 });
 
 const tasksQueue = dispatcher.queue;
