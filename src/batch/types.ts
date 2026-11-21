@@ -6,9 +6,9 @@ export type NodeId = string;
 export type NodeName = string;
 export type GUID = string;
 export type NodeSessionId = GUID;
-export type CPUs = NodeId[];
+export type TaskSlots = NodeId[];
 export type PID = number;
-export type CPUUsageByNode = {[nodeId: NodeId]: number};
+export type TaskSlotsUsageByNode = {[nodeId: NodeId]: number};
 
 export type TaskLauncherClientInfo = {
     state: string;

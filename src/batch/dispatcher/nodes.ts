@@ -5,8 +5,8 @@ import {
     NodeSessionId,
     SystemLoadStatus,
     SystemLoadingInfo,
-    CPUs,
-    CPUUsageByNode,
+    TaskSlots,
+    TaskSlotsUsageByNode,
     TaskItem,
     TaskLaunchSuccessPayload,
     INodeTaskDispatcher,
@@ -129,14 +129,14 @@ export class Node extends EventEmitter {
     get numUsableTaskSlots(): number {
         return this.enabled ? this._numAvailableTaskSlots : 0;
     }
-    get usableTaskSlots(): CPUs {
-        const cpus: CPUs = [];
+    get usableTaskSlots(): TaskSlots {
+        const taskSlots: TaskSlots = [];
         if (this.enabled) {
             for (let i = 0; i < this._numAvailableTaskSlots; i++) {
-                cpus.push(this.id);
+                taskSlots.push(this.id);
             }
         }
-        return cpus;
+        return taskSlots;
     }
     get remoteSocketAddress(): string {
         return this._connection.remoteSocketAddress;
@@ -200,8 +200,8 @@ export class Node extends EventEmitter {
 
 export interface NodeTrackerEvents {
     "change": [];
-    "usable-cpus-become-available": [];   // fired when usable CPUs become available (from unavailable to available)
-    "usable-cpus-increased": [oldUsableCpus: number];   // fired when more usable CPUs become available
+    "usable-task-slots-become-available": [];   // fired when usable task slots become available (from unavailable to available)
+    "usable-task-slots-increased": [oldUsableTaskSlots: number];   // fired when more usable task slots become available
     "node-added": [node: Node];
     "node-removed": [node: Node];
     "nodes-present": [];
@@ -212,12 +212,12 @@ export interface NodeTrackerEvents {
 export class NodesTracker extends EventEmitter implements INodeTaskDispatcher {
     private _nodes: Map<NodeId, Node> = new Map<NodeId, Node>();
     private _nodeList: Node[] = [];
-    private _numUsableTaskSlots: number = 0;
+    private _numUsableTaskSlots: number = 0;    // current number of usable task slots across all nodes
     constructor() {
         super();
     }
     private calculateNumberOfUsableTaskSlots(): number {
-        let total = 0;
+        let total: number = 0;
         for (const node of this._nodes.values()) {
             total += node.numUsableTaskSlots;
         }
@@ -234,11 +234,11 @@ export class NodesTracker extends EventEmitter implements INodeTaskDispatcher {
             if (newUsableTaskSlots !== oldUsableTaskSlots) {
                 me._numUsableTaskSlots = newUsableTaskSlots;
             }
-            if (oldUsableTaskSlots === 0 && newUsableTaskSlots > 0) {
-                me.emit('usable-cpus-become-available');
+            if (oldUsableTaskSlots === 0 && newUsableTaskSlots > 0) {   // no task slots available before, now available
+                me.emit('usable-task-slots-become-available');
             }
             if (newUsableTaskSlots > oldUsableTaskSlots) {
-                me.emit('usable-cpus-increased', oldUsableTaskSlots);
+                me.emit('usable-task-slots-increased', oldUsableTaskSlots);
             }
             me.emit('change'); 
         }).on('task-finished', (payload) => {
@@ -249,16 +249,16 @@ export class NodesTracker extends EventEmitter implements INodeTaskDispatcher {
         if (newUsableTaskSlots !== oldUsableTaskSlots) {
             this._numUsableTaskSlots = newUsableTaskSlots;
         }
-        if (oldUsableTaskSlots === 0 && newUsableTaskSlots > 0) {
-            this.emit('usable-cpus-become-available');
+        if (oldUsableTaskSlots === 0 && newUsableTaskSlots > 0) {   // no task slots available before, now available
+            this.emit('usable-task-slots-become-available');
         }
         if (newUsableTaskSlots > oldUsableTaskSlots) {
-            this.emit('usable-cpus-increased', oldUsableTaskSlots);
+            this.emit('usable-task-slots-increased', oldUsableTaskSlots);
         }
         this.emit('node-added', node);
         this.emit('change');
         const newNumNodes = this._nodes.size;
-        if (oldNumNodes == 0 && newNumNodes > 0) {
+        if (oldNumNodes == 0 && newNumNodes > 0) {  // the first node has been added
             // The first node has been added
             this.emit('nodes-present');
         }
@@ -307,25 +307,25 @@ export class NodesTracker extends EventEmitter implements INodeTaskDispatcher {
     get hasUsableTaskSlots(): boolean {
         return this._numUsableTaskSlots > 0;
     }
-    get usableTaskSlots(): CPUs {
-        const cpus: CPUs = [];
+    get usableTaskSlots(): TaskSlots {
+        const taskSlots: TaskSlots = [];
         for (const node of this._nodes.values()) {  // for each node
-            cpus.push(...node.usableTaskSlots);
+            taskSlots.push(...node.usableTaskSlots);
         }
-        return cpus;
+        return taskSlots;
     }
-    // call this function to reflect the CPU usage on nodes after dispatching tasks
-    increaseCPUUsageOnNodes(cpuUsage: CPUUsageByNode): void {
-        for (const [nodeId, count] of Object.entries(cpuUsage)) {
+    // call this function to reflect the task slots usage on nodes after dispatching tasks
+    increaseTaskSlotsUsageOnNodes(taskSlotsUsage: TaskSlotsUsageByNode): void {
+        for (const [nodeId, count] of Object.entries(taskSlotsUsage)) {
             const node = this._nodes.get(nodeId);
             if (node) {
                 node.decreaseAvailableTaskSlots(count);
             }
         }
     }
-    // call this function to reflect the CPU usage on nodes after failing to dispatch tasks
-    decreaseCPUUsageOnNodes(cpuUsage: CPUUsageByNode): void {
-        for (const [nodeId, count] of Object.entries(cpuUsage)) {
+    // call this function to reflect the task slots usage on nodes after failing to dispatch tasks
+    decreaseTaskSlotsUsageOnNodes(taskSlotsUsage: TaskSlotsUsageByNode): void {
+        for (const [nodeId, count] of Object.entries(taskSlotsUsage)) {
             const node = this._nodes.get(nodeId);
             if (node) {
                 node.increaseAvailableTaskSlots(count);

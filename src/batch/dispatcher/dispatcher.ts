@@ -45,7 +45,7 @@ export class Dispatcher extends EventEmitter {
         this.queue.on("tasks-queued", () => {
             this.dispatchTasksIfNecessary();
         });
-        this.nodesTracker.on("usable-cpus-increased", () => {
+        this.nodesTracker.on("usable-task-slots-increased", () => {
             this.dispatchTasksIfNecessary();
         });
         this.on("enabled", () => {
@@ -108,8 +108,8 @@ export class Dispatcher extends EventEmitter {
                 const oneTaskDispatchedListener = (row: DispatchResultRow) => {
                     this.safeEmit("one-task-dispatched", row);
                 };
-                dispatchSession.once("cpus-usage-assignment", (cpusUsage) => {
-                    this.nodesTracker.increaseCPUUsageOnNodes(cpusUsage); // increase CPU usage on nodes based on the dispatch assignments by assuming every task dispatch to the node is successful.
+                dispatchSession.once("task-slots-usage-assignment", (taskSlotsUsage) => {
+                    this.nodesTracker.increaseTaskSlotsUsageOnNodes(taskSlotsUsage); // increase task slots usage on nodes based on the dispatch assignments by assuming every task dispatch to the node is successful.
                 })
                 .on("node-to-be-dispatched-one-task", nodeToBeDispatchedOneTaskListener)
                 .on("one-task-dispatched", oneTaskDispatchedListener)
@@ -118,7 +118,7 @@ export class Dispatcher extends EventEmitter {
                 const errors = await dispatchSession.dispatch(usableTaskSlots, tasks);
                 dispatchSession.off("node-to-be-dispatched-one-task", nodeToBeDispatchedOneTaskListener);
                 dispatchSession.off("one-task-dispatched", oneTaskDispatchedListener);
-                this.nodesTracker.decreaseCPUUsageOnNodes(errors);  // for nodes where task dispatch failed, decrease/release the CPU usage accordingly
+                this.nodesTracker.decreaseTaskSlotsUsageOnNodes(errors);  // for nodes where task dispatch failed, decrease/release the task slots usage accordingly
                 this.currentDispatchingSession = null;   // mark the end of a dispatch session
             }
         }

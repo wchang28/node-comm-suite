@@ -2,12 +2,12 @@ import { EventEmitter } from 'node:events';
 import {
     JobId,
     TaskIndex,
-    CPUs,
+    TaskSlots,
     NodeId,
     TaskItem,
     TaskItems,
     PID,
-    CPUUsageByNode,
+    TaskSlotsUsageByNode,
     TaskLauncherAckError,
     INodeTaskDispatcher
 } from '../types.js';
@@ -28,7 +28,7 @@ export interface DispatchResultRow {
     error?: TaskDispatchError | null;
 };
 
-export type DispatchErrors = CPUUsageByNode;
+export type DispatchErrors = TaskSlotsUsageByNode;
 
 export interface DispatchSessionJSON {
     sessionId: string;
@@ -43,7 +43,7 @@ export interface DispatchSessionJSON {
 
 export interface DispatchSessionEvents {
     "node-to-be-dispatched-one-task": (nodeId: NodeId, taskItem: TaskItem) => void;
-    "cpus-usage-assignment": (cpusUsage: CPUUsageByNode) => void;   // emitted only once when the CPU usage is assigned at the start of the dispatch session
+    "task-slots-usage-assignment": (cpusUsage: TaskSlotsUsageByNode) => void;   // emitted only once when the task slots usage is assigned at the start of the dispatch session
     "one-task-dispatched": (row: DispatchResultRow) => void;
     "session-completed": (sessionJSON: DispatchSessionJSON) => void;    // emitted only once when the dispatch session is completed
     "change": () => void;
@@ -84,25 +84,25 @@ export class DispatchSession extends EventEmitter {
         this.safeEmit("change");
     }
     // call this function to start dispatching tasks to nodes
-    dispatch(usableCPUs: CPUs, tasks: TaskItems) {
+    dispatch(usableTaskSlots: TaskSlots, tasks: TaskItems) {
         assert(tasks !== null && tasks != undefined && tasks.length > 0, 'No tasks to dispatch');
-        assert(usableCPUs.length > 0, 'No usable CPUs to dispatch tasks to');
-        assert(tasks.length <= usableCPUs.length, 'More tasks to dispatch than usable CPUs');
+        assert(usableTaskSlots.length > 0, 'No usable task slots to dispatch tasks to');
+        assert(tasks.length <= usableTaskSlots.length, 'More tasks to dispatch than usable task slots');
         this._dispatchSessionJSON = this.initSessionJSON;
         this._dispatchSessionJSON.numTasks = tasks.length;
         this._dispatchSessionJSON.rows = new Array(tasks.length).fill(null);
         const me = this;
         const completionPromise = new Promise<DispatchErrors>((resolve) => {
-            const cpusUsage: CPUUsageByNode = {};
+            const taskSlotsUsage: TaskSlotsUsageByNode = {};
             const errors: DispatchErrors = {};
-            const cpus = [...usableCPUs];   // make a copy of usable CPUs
+            const taskSlots = [...usableTaskSlots];   // make a copy of usable task slots
             for (let i = 0; i < tasks.length; i++) {    // for each task to be dispatched
                 const taskItem = tasks[i];
                 const {j, t} = taskItem;
-                const indexPicked = getRandomInt(cpus.length - 1);
-                const nodeId = cpus[indexPicked];   // node picked
-                cpus.splice(indexPicked, 1);
-                cpusUsage[nodeId] = (cpusUsage[nodeId] || 0) + 1;   // increase CPU usage on the node
+                const indexPicked = getRandomInt(taskSlots.length - 1);
+                const nodeId = taskSlots[indexPicked];   // node picked
+                taskSlots.splice(indexPicked, 1);
+                taskSlotsUsage[nodeId] = (taskSlotsUsage[nodeId] || 0) + 1;   // increase task slots usage on the node
                 me._dispatchSessionJSON.rows[i] = {
                     j,
                     t,
@@ -125,8 +125,8 @@ export class DispatchSession extends EventEmitter {
                     me.onOneTaskDispatchCompleted(row, errors, resolve, null, message as TaskDispatchError);
                 });
             }
-            assert(cpus.length >= 0, 'leftover usable CPUs should be >= 0');  // leftover usable CPUs should be >= 0
-            me.safeEmit("cpus-usage-assignment", cpusUsage);
+            assert(taskSlots.length >= 0, 'leftover usable task slots should be >= 0');  // leftover usable task slots should be >= 0
+            me.safeEmit("task-slots-usage-assignment", taskSlotsUsage);
         });
         return completionPromise;
     }
