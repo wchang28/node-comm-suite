@@ -15,7 +15,7 @@ import { ClientConnectionsMonitor } from './client-connections-monitor.js';
 import { MostRecentJobsMonitor } from './most-recent-jobs-monitor.js';
 
 const PORT: number = (process.env.PORT ? parseInt(process.env.PORT) : 8080);
-const HOSTNAME: string = process.env.HOSTNAME || '0.0.0.0';
+const LISTEN_HOST: string = process.env.LISTEN_HOST || '0.0.0.0';
 
 // DB settings come from a JSON file (default ./db-configs.json, override with DB_CONFIGS_PATH)
 const dbConfigsPath = process.env.DB_CONFIGS_PATH ?? "db-configs.json";
@@ -212,13 +212,13 @@ connectionsMonitorConnectionManager.setupExpressRouter(clientConnectionsRouter, 
 app.use('/job', jobRouter);
 
 // Start server
-const server = app.listen(PORT, HOSTNAME, () => {
-    console.log(`SSE Server running on http://${HOSTNAME}:${PORT}`);
-    console.log(`Task launcher SSE endpoint: http://${HOSTNAME}:${PORT}/task-launcher/events`);
-    console.log(`Dispatcher monitor SSE endpoint: http://${HOSTNAME}:${PORT}/dispatcher/events`);
-    console.log(`Recent jobs monitor SSE endpoint: http://${HOSTNAME}:${PORT}/recent-jobs/events`);
-    console.log(`Connections monitor SSE endpoint: http://${HOSTNAME}:${PORT}/client-connections/events`);
-    console.log(`Health check: http://${HOSTNAME}:${PORT}/health`);
+const server = app.listen(PORT, LISTEN_HOST, () => {
+    console.log(`SSE Server running on http://${LISTEN_HOST}:${PORT}`);
+    console.log(`Task launcher SSE endpoint: http://${LISTEN_HOST}:${PORT}/task-launcher/events`);
+    console.log(`Dispatcher monitor SSE endpoint: http://${LISTEN_HOST}:${PORT}/dispatcher/events`);
+    console.log(`Recent jobs monitor SSE endpoint: http://${LISTEN_HOST}:${PORT}/recent-jobs/events`);
+    console.log(`Connections monitor SSE endpoint: http://${LISTEN_HOST}:${PORT}/client-connections/events`);
+    console.log(`Health check: http://${LISTEN_HOST}:${PORT}/health`);
 });
 
 // Disable all built-in Node.js HTTP timeouts

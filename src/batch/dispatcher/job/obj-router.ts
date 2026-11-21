@@ -58,6 +58,9 @@ const killJobPermissionMiddleware = (req: express.Request, res: express.Response
     if (!user || !(new PoolPermission(user).canKillJob(job))) {
         return res.status(403).json({message: 'Permission denied'});
     }
+    if (job.status == "ABORTED" || job.status == "FINISHED") {
+        return res.status(400).json({message: 'Cannot kill a job that is already aborted or finished'});
+    }
     next();
 };
 

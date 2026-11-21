@@ -55,5 +55,6 @@ Thumbs.db
 *.key
 
 sensitive/
+test-data/
 db-configs*.json
 counter*.json
