@@ -26,33 +26,33 @@ export interface NodeEvents {
     "enabled": [];
     "disabled": [];
     "task-finished": [payload: TaskFinishedMsgPayload]; // fired when a task has finished on this node
-    "more-usable-cpus-become-available": [];   // fired when more enabled CPUs become available for this node
+    "more-usable-task-slots-become-available": [];   // fired when more enabled task slots become available for this node
 }
 
 export class Node extends EventEmitter {
     private _enabled: boolean = true;
-    private _numAvailableCpus: number;
-    constructor(private _connection: Connection, public id: NodeId, public sessionId: NodeSessionId, public hostname: NodeName, public totalCpus: number, private _currentLoading: SystemLoadingInfo) {
+    private _numAvailableTaskSlots: number;
+    constructor(private _connection: Connection, public id: NodeId, public sessionId: NodeSessionId, public hostname: NodeName, public totalTaskSlots: number, private _currentLoading: SystemLoadingInfo) {
         super();
         assert(this.id, "Node ID must be defined");
         assert(this.id === this._connection.connId, `Node ID ${this.id} must match connection ID ${this._connection.connId}`);
         assert(this.sessionId, `Node session ID must be defined (node=${id})`);
         assert(this.hostname, `Node hostname must be defined (node=${id})`);
-        assert(this.totalCpus > 0, `Total CPUs must be greater than 0 (node=${id}, totalCpus=${totalCpus})`);
-        this._numAvailableCpus = this.totalCpus;
+        assert(this.totalTaskSlots > 0, `Total CPUs must be greater than 0 (node=${id}, totalTaskSlots=${totalTaskSlots})`);
+        this._numAvailableTaskSlots = this.totalTaskSlots;
         const me = this;
         this._connection.on("message", (event: string, data?: any) => {
-            if (event === "task-finished") {
-                me.increaseAvailableCpus(1);
+            if (event === "task-finished") {    // one task is finished on this node
+                me.increaseAvailableTaskSlots(1);   // increase the number of available task slots by 1
                 me.emit('task-finished', data as TaskFinishedMsgPayload);
             }
         });
     }
-    get numAvailableCpus(): number {
-        return this._numAvailableCpus;
+    get numAvailableTaskSlots(): number {
+        return this._numAvailableTaskSlots;
     }
-    get numUsedCpus(): number {
-        return this.totalCpus - this._numAvailableCpus;
+    get numUsedTaskSlots(): number {
+        return this.totalTaskSlots - this._numAvailableTaskSlots;
     }
     get currentLoading(): SystemLoadingInfo {
         return this._currentLoading;
@@ -74,36 +74,36 @@ export class Node extends EventEmitter {
     get loadStatus(): SystemLoadStatus {
         return this._currentLoading.loadStatus;
     }
-    decreaseAvailableCpus(count: number): void {
-        assert(count > 0, "CPU decrease count must be positive");
-        const old = this._numAvailableCpus; 
-        this._numAvailableCpus -= count;
-        if (this._numAvailableCpus < 0) {
-            this._numAvailableCpus = 0;
+    decreaseAvailableTaskSlots(count: number): void {
+        assert(count > 0, "Task slot decrease count must be positive");
+        const old = this._numAvailableTaskSlots; 
+        this._numAvailableTaskSlots -= count;
+        if (this._numAvailableTaskSlots < 0) {
+            this._numAvailableTaskSlots = 0;
         }
-        if (this._numAvailableCpus !== old) {
+        if (this._numAvailableTaskSlots !== old) {
             this.emit('change');
         }
     }
-    increaseAvailableCpus(count: number): void {
-        assert(count > 0, "CPU increase count must be positive");
-        const old = this._numAvailableCpus;
-        this._numAvailableCpus += count;
-        if (this._numAvailableCpus > this.totalCpus) {
-            this._numAvailableCpus = this.totalCpus;
+    increaseAvailableTaskSlots(count: number): void {
+        assert(count > 0, "Task slot increase count must be positive");
+        const old = this._numAvailableTaskSlots;
+        this._numAvailableTaskSlots += count;
+        if (this._numAvailableTaskSlots > this.totalTaskSlots) {
+            this._numAvailableTaskSlots = this.totalTaskSlots;
         }
-        if (this._numAvailableCpus !== old) {
-            if (this._enabled && this._numAvailableCpus > old) {
-                this.emit('more-usable-cpus-become-available');
+        if (this._numAvailableTaskSlots !== old) {
+            if (this._enabled && this._numAvailableTaskSlots > old) {
+                this.emit('more-usable-task-slots-become-available');
             }
             this.emit('change');
         }
     }
-    get utiizationPercent(): number {
-        return (this.numUsedCpus / this.totalCpus) * 100.0;
+    get utilizationPercent(): number {
+        return (this.numUsedTaskSlots / this.totalTaskSlots) * 100.0;
     }
-    get utiization(): string {
-        const s =`${this.numUsedCpus}/${this.totalCpus}=${this.utiizationPercent.toFixed(2)}%`;
+    get utilization(): string {
+        const s =`${this.numUsedTaskSlots}/${this.totalTaskSlots}=${this.utilizationPercent.toFixed(2)}%`;
         return s;
     }
     get enabled(): boolean {
@@ -112,8 +112,8 @@ export class Node extends EventEmitter {
     set enabled(value: boolean) {
         if (this._enabled !== value) {
             this._enabled = value;
-            if (this._enabled && this._numAvailableCpus > 0) {  // disable -> enable
-                this.emit('more-usable-cpus-become-available');
+            if (this._enabled && this._numAvailableTaskSlots > 0) {  // disable -> enable
+                this.emit('more-usable-task-slots-become-available');
             }
             if (this._enabled) {
                 this.emit('enabled');
@@ -123,16 +123,16 @@ export class Node extends EventEmitter {
             this.emit('change');
         }
     }
-    get totalEnabledCpus(): number {
-        return this.enabled ? this.totalCpus : 0;
+    get totalEnabledTaskSlots(): number {
+        return this.enabled ? this.totalTaskSlots : 0;
     }
-    get numUsableCpus(): number {
-        return this.enabled ? this._numAvailableCpus : 0;
+    get numUsableTaskSlots(): number {
+        return this.enabled ? this._numAvailableTaskSlots : 0;
     }
-    get usableCpus(): CPUs {
+    get usableTaskSlots(): CPUs {
         const cpus: CPUs = [];
         if (this.enabled) {
-            for (let i = 0; i < this._numAvailableCpus; i++) {
+            for (let i = 0; i < this._numAvailableTaskSlots; i++) {
                 cpus.push(this.id);
             }
         }
@@ -174,10 +174,10 @@ export class Node extends EventEmitter {
             hostname: this.hostname,
             remoteSocketAddress: this.remoteSocketAddress,
             enabled: this._enabled,
-            totalCpus: this.totalCpus,
-            numUsedCpus: this.numUsedCpus,
-            numUsableCpus: this.numUsableCpus,
-            utiization: this.utiization,
+            totalTaskSlots: this.totalTaskSlots,
+            numUsedTaskSlots: this.numUsedTaskSlots,
+            numUsableTaskSlots: this.numUsableTaskSlots,
+            utilization: this.utilization,
             cpuUsagePercent: this.cpuUsagePercent,
             memUsagePercent: this.memUsagePercent,
             loadingScore: this.loadingScore,
@@ -212,14 +212,14 @@ export interface NodeTrackerEvents {
 export class NodesTracker extends EventEmitter implements INodeTaskDispatcher {
     private _nodes: Map<NodeId, Node> = new Map<NodeId, Node>();
     private _nodeList: Node[] = [];
-    private _numUsableCpus: number = 0;
+    private _numUsableTaskSlots: number = 0;
     constructor() {
         super();
     }
-    private calculateNumberOfUsableCpus(): number {
+    private calculateNumberOfUsableTaskSlots(): number {
         let total = 0;
         for (const node of this._nodes.values()) {
-            total += node.numUsableCpus;
+            total += node.numUsableTaskSlots;
         }
         return total;
     }
@@ -229,31 +229,31 @@ export class NodesTracker extends EventEmitter implements INodeTaskDispatcher {
         this._nodeList.push(node);
         const me = this;
         node.on('change', () => {
-            const oldUsableCpus = me._numUsableCpus;
-            const newUsableCpus = me.calculateNumberOfUsableCpus();
-            if (newUsableCpus !== oldUsableCpus) {
-                me._numUsableCpus = newUsableCpus;
+            const oldUsableTaskSlots = me._numUsableTaskSlots;
+            const newUsableTaskSlots = me.calculateNumberOfUsableTaskSlots();
+            if (newUsableTaskSlots !== oldUsableTaskSlots) {
+                me._numUsableTaskSlots = newUsableTaskSlots;
             }
-            if (oldUsableCpus === 0 && newUsableCpus > 0) {
+            if (oldUsableTaskSlots === 0 && newUsableTaskSlots > 0) {
                 me.emit('usable-cpus-become-available');
             }
-            if (newUsableCpus > oldUsableCpus) {
-                me.emit('usable-cpus-increased', oldUsableCpus);
+            if (newUsableTaskSlots > oldUsableTaskSlots) {
+                me.emit('usable-cpus-increased', oldUsableTaskSlots);
             }
             me.emit('change'); 
         }).on('task-finished', (payload) => {
             me.emit('task-finished-on-node', node, payload);
         });
-        const oldUsableCpus = this._numUsableCpus;
-        const newUsableCpus = this.calculateNumberOfUsableCpus();
-        if (newUsableCpus !== oldUsableCpus) {
-            this._numUsableCpus = newUsableCpus;
+        const oldUsableTaskSlots = this._numUsableTaskSlots;
+        const newUsableTaskSlots = this.calculateNumberOfUsableTaskSlots();
+        if (newUsableTaskSlots !== oldUsableTaskSlots) {
+            this._numUsableTaskSlots = newUsableTaskSlots;
         }
-        if (oldUsableCpus === 0 && newUsableCpus > 0) {
+        if (oldUsableTaskSlots === 0 && newUsableTaskSlots > 0) {
             this.emit('usable-cpus-become-available');
         }
-        if (newUsableCpus > oldUsableCpus) {
-            this.emit('usable-cpus-increased', oldUsableCpus);
+        if (newUsableTaskSlots > oldUsableTaskSlots) {
+            this.emit('usable-cpus-increased', oldUsableTaskSlots);
         }
         this.emit('node-added', node);
         this.emit('change');
@@ -283,7 +283,7 @@ export class NodesTracker extends EventEmitter implements INodeTaskDispatcher {
                 this._nodeList.splice(index, 1);
             }
             node.removeAllListeners();
-            this._numUsableCpus = this.calculateNumberOfUsableCpus();
+            this._numUsableTaskSlots = this.calculateNumberOfUsableTaskSlots();
             this.emit('node-removed', node);
             this.emit('change'); 
         }
@@ -301,16 +301,16 @@ export class NodesTracker extends EventEmitter implements INodeTaskDispatcher {
     get numNodes(): number {
         return this._nodes.size;
     }
-    get numUsableCpus(): number {
-        return this._numUsableCpus;
+    get numUsableTaskSlots(): number {
+        return this._numUsableTaskSlots;
     }
-    get hasUsableCpus(): boolean {
-        return this._numUsableCpus > 0;
+    get hasUsableTaskSlots(): boolean {
+        return this._numUsableTaskSlots > 0;
     }
-    get usableCpus(): CPUs {
+    get usableTaskSlots(): CPUs {
         const cpus: CPUs = [];
         for (const node of this._nodes.values()) {  // for each node
-            cpus.push(...node.usableCpus);
+            cpus.push(...node.usableTaskSlots);
         }
         return cpus;
     }
@@ -319,7 +319,7 @@ export class NodesTracker extends EventEmitter implements INodeTaskDispatcher {
         for (const [nodeId, count] of Object.entries(cpuUsage)) {
             const node = this._nodes.get(nodeId);
             if (node) {
-                node.decreaseAvailableCpus(count);
+                node.decreaseAvailableTaskSlots(count);
             }
         }
     }
@@ -328,7 +328,7 @@ export class NodesTracker extends EventEmitter implements INodeTaskDispatcher {
         for (const [nodeId, count] of Object.entries(cpuUsage)) {
             const node = this._nodes.get(nodeId);
             if (node) {
-                node.increaseAvailableCpus(count);
+                node.increaseAvailableTaskSlots(count);
             }
         }
     }

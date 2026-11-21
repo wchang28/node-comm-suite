@@ -101,7 +101,7 @@ export class TaskLauncherApp extends EventEmitter implements INodeIdentitySource
     public listenHost: string;
     public listenPort: number;
     public systemLoadPoolingIntervalMS: number;
-    public availableCPUs: number;
+    public totalTaskSlots: number;  // total number of task slots available on this node = total number of tasks are allowed be run on this node concurrently
     private _localBaseUrl: string;
     public mainDiskDrivePath: string | null;
     private _sseClient: Client;
@@ -115,7 +115,7 @@ export class TaskLauncherApp extends EventEmitter implements INodeIdentitySource
         listenPort?: number | null,
         systemLoadPoolingIntervalMS?: number | null,
         reservedCPUs?: number | null,
-        availableCPUs?: number | null,
+        totalTaskSlots?: number | null,
         mainDiskDrivePath?: string | null
     ) {
         super();
@@ -126,7 +126,7 @@ export class TaskLauncherApp extends EventEmitter implements INodeIdentitySource
         assert(this.listenHost, `listenHost must be defined`);
         assert(this.listenPort > 0 && this.listenPort < 65536, `listenPort (${this.listenPort}) must be a valid port number between 1 and 65535`);
         assert(this.systemLoadPoolingIntervalMS >= 500, `systemLoadPoolingIntervalMS (${this.systemLoadPoolingIntervalMS}) must be at least 500ms`);
-        this.availableCPUs = this.calculateAvailableCPUs(reservedCPUs, availableCPUs);
+        this.totalTaskSlots = this.calculateTotalTaskSlots(reservedCPUs, totalTaskSlots);
         this._localBaseUrl = `http://127.0.0.1:${this.listenPort}`;
         this.mainDiskDrivePath = this.getMainDiskDrivePath(mainDiskDrivePath);
         const me = this;
@@ -235,17 +235,17 @@ export class TaskLauncherApp extends EventEmitter implements INodeIdentitySource
         const info: NodeIdentifyInfo = {
             sessionId: this.sessionId,
             hostname: this.hostname,
-            availableCPUs: this.availableCPUs,
+            totalTaskSlots: this.totalTaskSlots,
             currentLoading
         }
         return info;
     }
     get taskUtilization(): TaskUtilizationInfo {
-        const maxAllowedRunningTasks = this.availableCPUs;
+        const totalTaskSlots = this.totalTaskSlots;
         const numRunningTasks = this._tasksTracker.numRunningTasks;
-        const utilizationPercent = numRunningTasks / maxAllowedRunningTasks * 100.0;
+        const utilizationPercent = numRunningTasks / totalTaskSlots * 100.0;
         return {
-            maxAllowedRunningTasks,
+            totalTaskSlots,
             numRunningTasks,
             utilizationPercent
         };
@@ -477,14 +477,14 @@ export class TaskLauncherApp extends EventEmitter implements INodeIdentitySource
         const jobRouter = this.createJobRouter();
         app.use("/job", jobRouter);
     }
-    private calculateAvailableCPUs(reservedCPUs?: number | null, availableCPUs?: number | null): number {
-        if (typeof availableCPUs === "number" && availableCPUs > 0) {
-            return availableCPUs!;
+    private calculateTotalTaskSlots(reservedCPUs?: number | null, totalTaskSlots?: number | null): number {
+        if (typeof totalTaskSlots === "number" && totalTaskSlots > 0) {
+            return totalTaskSlots!;
         } else {
             const reserved = ((typeof reservedCPUs === "number" && reservedCPUs >= 0) ? reservedCPUs! : 2);
             const totalCPUs = os.cpus().length;
-            const available = totalCPUs - reserved;
-            return (available > 0 ? available : 1);
+            const totalTaskSlots = totalCPUs - reserved;
+            return (totalTaskSlots > 0 ? totalTaskSlots : 1);
         }
     }
     private async handleNodeIdentify() {

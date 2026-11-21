@@ -65,11 +65,11 @@ dispatcher.on("dispatching", (sessionId) => {
 
 const nodesTracker = dispatcher.nodesTracker;
 nodesTracker.on("node-added", (node) => {
-    console.log(`Node <<added>>: ${node.hostname} (ID: ${node.id}, Session ID: ${node.sessionId}, Total CPUs: ${node.totalCpus})`);
+    console.log(`Node <<added>>: ${node.hostname} (ID: ${node.id}, Session ID: ${node.sessionId}, Total Task Slots: ${node.totalTaskSlots})`);
 }).on("node-removed", (node) => {
     console.log(`Node <<removed>>: ${node.hostname} (ID: ${node.id}, Session ID: ${node.sessionId})`);
 }).on("change", () => {
-    console.log(`NodesTracker <<changed>>. Current nodes: ${nodesTracker.numNodes}, Usable CPUs: ${nodesTracker.numUsableCpus}`);
+    console.log(`NodesTracker <<changed>>. Current nodes: ${nodesTracker.numNodes}, Usable Task Slots: ${nodesTracker.numUsableTaskSlots}`);
 }).on("task-finished-on-node", (node, payload) => {
     console.log(`Node ${node.hostname} (ID: ${node.id}) <<task-finished-on-node>>:`, JSON.stringify(payload));
 });

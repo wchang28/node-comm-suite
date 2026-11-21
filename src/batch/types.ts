@@ -17,7 +17,7 @@ export type TaskLauncherClientInfo = {
 }
 
 export interface TaskUtilizationInfo {
-    maxAllowedRunningTasks: number;
+    totalTaskSlots: number;
     numRunningTasks: number;
     utilizationPercent: number;
 }
@@ -79,7 +79,7 @@ export interface SystemLoadingInfo {
 export interface NodeIdentifyInfo {
     sessionId: NodeSessionId;
     hostname: NodeName;
-    availableCPUs: number;  // number of available CPUs on this node (> 0)
+    totalTaskSlots: number;  // total number of task slots available on this node (> 0)
     currentLoading: SystemLoadingInfo;
 }
 
@@ -89,10 +89,10 @@ export interface NodeInfoRow {
     hostname: NodeName;
     remoteSocketAddress: string;
     enabled: boolean;
-    totalCpus: number;
-    numUsedCpus: number;
-    numUsableCpus: number;
-    utiization: string;
+    totalTaskSlots: number;
+    numUsedTaskSlots: number;
+    numUsableTaskSlots: number;
+    utilization: string;
     cpuUsagePercent: number;
     memUsagePercent: number;
     loadingScore: number;

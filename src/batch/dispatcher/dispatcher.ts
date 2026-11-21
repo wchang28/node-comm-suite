@@ -35,8 +35,8 @@ export class Dispatcher extends EventEmitter {
         this._connectionManager.on("connected", async (connection) => {
             const nodeId = connection.connId;
             const result = await connection.request<NodeIdentifyInfo>("/identify", "GET");
-            const {sessionId, hostname, availableCPUs, currentLoading} = result;
-            const node = new Node(connection, nodeId, sessionId, hostname, availableCPUs, currentLoading);
+            const {sessionId, hostname, totalTaskSlots, currentLoading} = result;
+            const node = new Node(connection, nodeId, sessionId, hostname, totalTaskSlots, currentLoading);
             this.nodesTracker.addNode(node);
         }).on("disconnected", (connection) => {
             const nodeId = connection.connId;
@@ -98,9 +98,9 @@ export class Dispatcher extends EventEmitter {
     }
     private async dispatchTasksIfNecessary() {
         if (this._enabled && !this.dispatching && !this.queue.isEmpty) {
-            const usableCpus = this.nodesTracker.usableCpus;
-            if (usableCpus.length > 0) {
-                const tasks = this.queue.dequeueTasks(usableCpus.length);
+            const usableTaskSlots = this.nodesTracker.usableTaskSlots;
+            if (usableTaskSlots.length > 0) {
+                const tasks = this.queue.dequeueTasks(usableTaskSlots.length);
                 const dispatchSession = new DispatchSession(this.nodesTracker);
                 const nodeToBeDispatchedOneTaskListener = (nodeId: NodeId, taskItem: TaskItem) => {
                     this.safeEmit("node-to-be-dispatched-one-task", nodeId, taskItem);
@@ -115,7 +115,7 @@ export class Dispatcher extends EventEmitter {
                 .on("one-task-dispatched", oneTaskDispatchedListener)
                 ;
                 this.currentDispatchingSession = dispatchSession;   // mark the start of a dispatch session
-                const errors = await dispatchSession.dispatch(usableCpus, tasks);
+                const errors = await dispatchSession.dispatch(usableTaskSlots, tasks);
                 dispatchSession.off("node-to-be-dispatched-one-task", nodeToBeDispatchedOneTaskListener);
                 dispatchSession.off("one-task-dispatched", oneTaskDispatchedListener);
                 this.nodesTracker.decreaseCPUUsageOnNodes(errors);  // for nodes where task dispatch failed, decrease/release the CPU usage accordingly
