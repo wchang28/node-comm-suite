@@ -20,11 +20,11 @@ import {error_message} from './utils.js';
 export type ClientState = "disconnected" | "connected" | "ready";
 
 interface ReadyTrackerEvents {
-    "disconnected": [];
-    "connected": [];
-    "ready": [];
-    "state-change": [newState: ClientState];
-    "connection-id-change": [oldConnId: ConnectionId, newConnId: ConnectionId];
+    "disconnected": () => void;
+    "connected": () => void;
+    "ready": () => void;
+    "state-change": (newState: ClientState) => void;
+    "connection-id-change": (oldConnId: ConnectionId, newConnId: ConnectionId) => void;
 }
 
 class ReadyTracker extends EventEmitter {
@@ -35,15 +35,37 @@ class ReadyTracker extends EventEmitter {
     }
     on<K extends keyof ReadyTrackerEvents>(
         event: K,
-        listener: (...args: ReadyTrackerEvents[K]) => void
+        listener: ReadyTrackerEvents[K]
     ): this {
         return super.on(event, listener);
     }
+    off<K extends keyof ReadyTrackerEvents>(
+        event: K,
+        listener: ReadyTrackerEvents[K]
+    ): this {
+        return super.off(event, listener);
+    }
     emit<K extends keyof ReadyTrackerEvents>(
         event: K,
-        ...args: ReadyTrackerEvents[K]
+        ...args: Parameters<ReadyTrackerEvents[K]>
     ): boolean {
         return super.emit(event, ...args);
+    }
+    once<K extends keyof ReadyTrackerEvents>(
+        event: K,
+        listener: ReadyTrackerEvents[K]
+    ): this {
+        return super.once(event, listener);
+    }
+    safeEmit<K extends keyof ReadyTrackerEvents>(
+        event: K,
+        ...args: Parameters<ReadyTrackerEvents[K]>
+    ): void {
+        try {
+            super.emit(event, ...args);
+        } catch (err) {
+            console.error(`ReadyTracker "${event}" listener threw:`, err);
+        }
     }
     get state(): ClientState {
         if (!this._connected) {
@@ -63,8 +85,8 @@ class ReadyTracker extends EventEmitter {
     onConnected(): void {
         if (this.state === "disconnected") {
             this._connected = true;
-            this.emit("connected");
-            this.emit("state-change", this.state);
+            this.safeEmit("connected");
+            this.safeEmit("state-change", this.state);
         }
     }
     onReceiveConnectionId(connId: ConnectionId): void {
@@ -73,14 +95,14 @@ class ReadyTracker extends EventEmitter {
         }
         if (this.state === "connected") {
             this._connId = connId;
-            this.emit("ready");
-            this.emit("state-change", this.state);
+            this.safeEmit("ready");
+            this.safeEmit("state-change", this.state);
         } else if (this.state === "ready") {
             const oldConnId = this._connId!;
             // This case can happen when the server sends a new connection id after the client is already ready, we just update the connection id.
             if (oldConnId !== connId) {
                 this._connId = connId;
-                this.emit("connection-id-change", oldConnId, connId);
+                this.safeEmit("connection-id-change", oldConnId, connId);
             }
         }
     }
@@ -88,8 +110,8 @@ class ReadyTracker extends EventEmitter {
         if (this.state !== "disconnected") {
             this._connected = false;
             this._connId = null;
-            this.emit("disconnected");
-            this.emit("state-change", this.state);
+            this.safeEmit("disconnected");
+            this.safeEmit("state-change", this.state);
         }
     }
 }
