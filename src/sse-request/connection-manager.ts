@@ -19,7 +19,7 @@ import {
 } from './types.js';
 
 interface RequestTrackerEvents {
-    "completed": [];
+    "completed": () => void;    // fire (only once) only when the request is completed (either successfully or with an error)
 }
 
 class RequestTracker extends EventEmitter {
@@ -40,15 +40,25 @@ class RequestTracker extends EventEmitter {
     }
     once<K extends keyof RequestTrackerEvents>(
         event: K,
-        listener: (...args: RequestTrackerEvents[K]) => void
+        listener: RequestTrackerEvents[K]
     ): this {
         return super.once(event, listener);
     }
     emit<K extends keyof RequestTrackerEvents>(
         event: K,
-        ...args: RequestTrackerEvents[K]
+        ...args: Parameters<RequestTrackerEvents[K]>
     ): boolean {
         return super.emit(event, ...args);
+    }
+    safeEmit<K extends keyof RequestTrackerEvents>(
+        event: K,
+        ...args: Parameters<RequestTrackerEvents[K]>
+    ): void {
+        try {
+            this.emit(event, ...args);
+        } catch (err) {
+            console.error(`RequestTracker "${event}" listener threw:`, err);
+        }
     }
     get pending(): boolean {
         return this._pending;
@@ -93,7 +103,7 @@ class RequestTracker extends EventEmitter {
             }
             this._endTime = Date.now();
             this._durationMS = Math.max(0, this._endTime - (this._startTime));
-            this.emit('completed');
+            this.safeEmit('completed');
         }
     }
     onAcked(response: RequestResponse): void {
@@ -105,7 +115,7 @@ class RequestTracker extends EventEmitter {
 }
 
 interface ConnectionEvents {
-    "message": [event: string, data?: any]; // fired when this connection receives a message notification
+    "message": (event: string, data?: any) => void; // fired when this connection receives a message notification
 }
 
 export class Connection extends EventEmitter {
@@ -120,15 +130,37 @@ export class Connection extends EventEmitter {
     }
     on<K extends keyof ConnectionEvents>(
         event: K,
-        listener: (...args: ConnectionEvents[K]) => void
+        listener: ConnectionEvents[K]
     ): this {
         return super.on(event, listener);
     }
+    off<K extends keyof ConnectionEvents>(
+        event: K,
+        listener: ConnectionEvents[K]
+    ): this {
+        return super.off(event, listener);
+    }
     emit<K extends keyof ConnectionEvents>(
         event: K,
-        ...args: ConnectionEvents[K]
+        ...args: Parameters<ConnectionEvents[K]>
     ): boolean {
         return super.emit(event, ...args);
+    }
+    safeEmit<K extends keyof ConnectionEvents>(
+        event: K,
+        ...args: Parameters<ConnectionEvents[K]>
+    ): void {
+        try {
+            this.emit(event, ...args);
+        } catch (err) {
+            console.error(`Connection "${event}" listener threw:`, err);
+        }
+    }
+    once<K extends keyof ConnectionEvents>(
+        event: K,
+        listener: ConnectionEvents[K]
+    ): this {
+        return super.once(event, listener);
     }
     get req(): Request {
         return this.req_;
@@ -200,7 +232,7 @@ export class Connection extends EventEmitter {
     }
     // this connection received a normal message (not a request ack)
     onMessageReceived(event: string, data?: any): void {
-        this.emit("message", event, data);
+        this.safeEmit("message", event, data);
     }
     // cleanup on client-initiated disconnect
     onClientDisconnect(): void {
@@ -236,10 +268,10 @@ export class Connection extends EventEmitter {
 }
 
 interface ConnectionManagerEvents {
-    "connected": [connection: Connection];
-    "disconnected": [connection: Connection];
-    "change": [];
-    "connection-rejected": [remoteAddress: string|null, remotePort: number|null];
+    "connected": (connection: Connection) => void;
+    "disconnected": (connection: Connection) => void;
+    "change": () => void;
+    "connection-rejected": (remoteAddress: string|null, remotePort: number|null) => void;
 }
 
 export class ConnectionManager extends EventEmitter {
@@ -254,15 +286,37 @@ export class ConnectionManager extends EventEmitter {
     }
     on<K extends keyof ConnectionManagerEvents>(
         event: K,
-        listener: (...args: ConnectionManagerEvents[K]) => void
+        listener: ConnectionManagerEvents[K]
     ): this {
         return super.on(event, listener);
     }
+    off<K extends keyof ConnectionManagerEvents>(
+        event: K,
+        listener: ConnectionManagerEvents[K]
+    ): this {
+        return super.off(event, listener);
+    }
     emit<K extends keyof ConnectionManagerEvents>(
         event: K,
-        ...args: ConnectionManagerEvents[K]
+        ...args: Parameters<ConnectionManagerEvents[K]>
     ): boolean {
         return super.emit(event, ...args);
+    }
+    once<K extends keyof ConnectionManagerEvents>(
+        event: K,
+        listener: ConnectionManagerEvents[K]
+    ): this {
+        return super.once(event, listener);
+    }
+    safeEmit<K extends keyof ConnectionManagerEvents>(
+        event: K,
+        ...args: Parameters<ConnectionManagerEvents[K]>
+    ): void {
+        try {
+            super.emit(event, ...args);
+        } catch (err) {
+            console.error(`ConnectionManager "${event}" listener threw:`, err);
+        }
     }
     onConnectionRequestAcked(connId: ConnectionId, reqId: RequestId, response: RequestResponse): void {
         const connection = this._connections.get(connId);
@@ -278,8 +332,8 @@ export class ConnectionManager extends EventEmitter {
             const index = this._connectionLists.indexOf(connection);
             if (index >= 0) {
                 this._connectionLists.splice(index, 1);
-                this.emit('disconnected', connection);
-                this.emit('change');
+                this.safeEmit('disconnected', connection);
+                this.safeEmit('change');
             }
         }
     }
@@ -341,14 +395,14 @@ export class ConnectionManager extends EventEmitter {
                 req.on('close', () => {
                     me.onClientDisconnect(connection.connId);
                 });
-                me.emit('connected', connection);
-                me.emit('change');
+                me.safeEmit('connected', connection);
+                me.safeEmit('change');
             } else {
                 // Instantly destroys the socket connection
                 const remoteAddress = req.socket?.remoteAddress || null;
                 const remotePort = req.socket?.remotePort || null;
                 res.socket?.destroy();
-                me.emit("connection-rejected", remoteAddress, remotePort);
+                me.safeEmit("connection-rejected", remoteAddress, remotePort);
             }
         });
         // set the endpoint for client to send message back to server via http POST request

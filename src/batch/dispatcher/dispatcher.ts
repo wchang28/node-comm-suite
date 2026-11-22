@@ -33,11 +33,13 @@ export class Dispatcher extends EventEmitter {
         super();
         this.nodesJobKiller = new NodesJobKiller(this.nodesTracker, jobKillRetries, jobKillTryIntervalMS);
         this._connectionManager.on("connected", async (connection) => {
-            const nodeId = connection.connId;
-            const result = await connection.request<NodeIdentifyInfo>("/identify", "GET");
-            const {sessionId, hostname, totalTaskSlots, currentLoading} = result;
-            const node = new Node(connection, nodeId, sessionId, hostname, totalTaskSlots, currentLoading);
-            this.nodesTracker.addNode(node);
+            try {
+                const nodeId = connection.connId;
+                const result = await connection.request<NodeIdentifyInfo>("/identify", "GET");  // ask the node to identify itself
+                const {sessionId, hostname, totalTaskSlots, currentLoading} = result;
+                const node = new Node(connection, nodeId, sessionId, hostname, totalTaskSlots, currentLoading);
+                this.nodesTracker.addNode(node);
+            } catch (err) {}
         }).on("disconnected", (connection) => {
             const nodeId = connection.connId;
             this.nodesTracker.removeNode(nodeId);
