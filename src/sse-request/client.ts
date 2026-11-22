@@ -119,17 +119,17 @@ class ReadyTracker extends EventEmitter {
 export type RequestProcessor = (request: RequestContent) => Promise<RequestResponse>;
 
 export interface ClientEvents {
-    "state-change": [newState: ClientState];
-    "ready": [];
-    "connection-id-change": [oldConnId: ConnectionId, newConnId: ConnectionId];
-    "change": [];
-    "message": [data: any, event?: string, id?: string];    // emitted when a message is received from the SSE server
-    "connection-id": [connId: ConnectionId];    // emitted when a <connection-id> message is received from the SSE server
-    "ping": [timestamp: number];    // emitted when a <ping> message is received from the SSE server
-    "request": [connId: ConnectionId, reqId: RequestId, content: RequestContent];   // emitted when a <request> message is received from the SSE server
-    "request-ack-error": [connId: ConnectionId, reqId: RequestId, error: string];
-    "request-acked": [connId: ConnectionId, reqId: RequestId, response: RequestResponse, reply: any];
-    "event-notify": [event: string, data?: any];    // emitted when a <notify> message is received from the SSE server
+    "state-change": (newState: ClientState) => void;
+    "ready": () => void;
+    "connection-id-change": (oldConnId: ConnectionId, newConnId: ConnectionId) => void;
+    "change": () => void;
+    "message": (data: any, event?: string, id?: string) => void;    // emitted when a message is received from the SSE server
+    "connection-id": (connId: ConnectionId) => void;    // emitted when a <connection-id> message is received from the SSE server
+    "ping": (timestamp: number) => void;    // emitted when a <ping> message is received from the SSE server
+    "request": (connId: ConnectionId, reqId: RequestId, content: RequestContent) => void;   // emitted when a <request> message is received from the SSE server
+    "request-ack-error": (connId: ConnectionId, reqId: RequestId, error: string) => void;
+    "request-acked": (connId: ConnectionId, reqId: RequestId, response: RequestResponse, reply: any) => void;
+    "event-notify": (event: string, data?: any) => void;    // emitted when a <notify> message is received from the SSE server
 }
 
 const defaultRequestProcessor: RequestProcessor = async (request: RequestContent) => {
@@ -149,66 +149,85 @@ export class Client extends EventEmitter {
         this._readyPromise = this.createReadyPromise();
     }
     private initReadyTracker(): void {
-        const me = this;
         this._readyTracker.reset();
         this._readyTracker.removeAllListeners();
         this._readyTracker.on("state-change", (newState) => {
-            me.emit("state-change", newState);
-            me.emit("change");
+            this.safeEmit("state-change", newState);
+            this.safeEmit("change");
         }).on("connection-id-change", (oldConnId, newConnId) => {
-            me.emit("connection-id-change", oldConnId, newConnId);
-            me.emit("change");
+            this.safeEmit("connection-id-change", oldConnId, newConnId);
+            this.safeEmit("change");
         }).on("ready", () => {
-            me.emit("ready");
+            this.safeEmit("ready");
         });
     }
     on<K extends keyof ClientEvents>(
         event: K,
-        listener: (...args: ClientEvents[K]) => void
+        listener: (...args: Parameters<ClientEvents[K]>) => void
     ): this {
         return super.on(event, listener);
     }
+    off<K extends keyof ClientEvents>(
+        event: K,
+        listener: (...args: Parameters<ClientEvents[K]>) => void
+    ): this {
+        return super.off(event, listener);
+    }
     emit<K extends keyof ClientEvents>(
         event: K,
-        ...args: ClientEvents[K]
+        ...args: Parameters<ClientEvents[K]>
     ): boolean {
         return super.emit(event, ...args);
     }
+    once<K extends keyof ClientEvents>(
+        event: K,
+        listener: (...args: Parameters<ClientEvents[K]>) => void
+    ): this {
+        return super.once(event, listener);
+    }
+    safeEmit<K extends keyof ClientEvents>(
+        event: K,
+        ...args: Parameters<ClientEvents[K]>
+    ): void {
+        try {
+            super.emit(event, ...args);
+        } catch (err) {
+            console.error(`Client "${event}" listener threw:`, err);
+        }
+    }
     private createReadyPromise(): Promise<void> {
-        const me = this;
         return new Promise<void>((resolve) => {
-            me._readyTracker.on("ready", () => {
+            this._readyTracker.on("ready", () => {
                 resolve();
             });
         });
     }
     connect(): Promise<void> {
-        const me = this;
         this._eventSource = createEventSource({
             url: this.url,
             onMessage: ({data, event, id}) => {
                 const o = JSON.parse(data);
-                me.emit("message", o, event, id);
+                this.safeEmit("message", o, event, id);
                 const eventType = event as SSEEventType;
                 if (eventType === "connection-id") {
                     const { connId } = (o as ConnectionIdPayload);
-                    me.emit("connection-id", connId);
-                    me._readyTracker.onReceiveConnectionId(connId);
+                    this.safeEmit("connection-id", connId);
+                    this._readyTracker.onReceiveConnectionId(connId);
                 } else if (eventType === "ping") {
                     const { timestamp } = (o as PingPayload);
-                    me.emit("ping", timestamp);
+                    this.safeEmit("ping", timestamp);
                 } else if (eventType === "request") {
-                    me.handleRequest(o as RequestEnvelope).then(() => {}).catch((_) => {});
+                    this.handleRequest(o as RequestEnvelope).then(() => {}).catch((_) => {});
                 } else if (eventType === "notify") {
                     const { event, data } = (o as NotifyPayload);
-                    me.emit("event-notify", event, data);
+                    this.safeEmit("event-notify", event, data);
                 }
             }
             ,onConnect:() => {
-                me._readyTracker.onConnected();
+                this._readyTracker.onConnected();
             }
             ,onDisconnect:() => {
-                me.close();
+                this.close();
             }
         });
         return this.ready;
