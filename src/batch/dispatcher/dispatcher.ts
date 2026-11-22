@@ -45,7 +45,7 @@ export class Dispatcher extends EventEmitter {
         this.queue.on("tasks-queued", () => {
             this.dispatchTasksIfNecessary();
         });
-        this.nodesTracker.on("usable-task-slots-increased", () => {
+        this.nodesTracker.on("change", () => {
             this.dispatchTasksIfNecessary();
         });
         this.on("enabled", () => {
@@ -102,6 +102,7 @@ export class Dispatcher extends EventEmitter {
             if (usableTaskSlots.length > 0) {
                 const tasks = this.queue.dequeueTasks(usableTaskSlots.length);
                 const dispatchSession = new DispatchSession(this.nodesTracker);
+                this.currentDispatchingSession = dispatchSession;   // mark the start of a dispatch session
                 const nodeToBeDispatchedOneTaskListener = (nodeId: NodeId, taskItem: TaskItem) => {
                     this.safeEmit("node-to-be-dispatched-one-task", nodeId, taskItem);
                 };
@@ -114,7 +115,6 @@ export class Dispatcher extends EventEmitter {
                 .on("node-to-be-dispatched-one-task", nodeToBeDispatchedOneTaskListener)
                 .on("one-task-dispatched", oneTaskDispatchedListener)
                 ;
-                this.currentDispatchingSession = dispatchSession;   // mark the start of a dispatch session
                 const errors = await dispatchSession.dispatch(usableTaskSlots, tasks);
                 dispatchSession.off("node-to-be-dispatched-one-task", nodeToBeDispatchedOneTaskListener);
                 dispatchSession.off("one-task-dispatched", oneTaskDispatchedListener);

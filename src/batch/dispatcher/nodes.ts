@@ -22,11 +22,10 @@ import {Connection} from "../../sse-request/connection-manager.js";
 import assert from "assert";
 
 export interface NodeEvents {
-    "change": [];
-    "enabled": [];
-    "disabled": [];
-    "task-finished": [payload: TaskFinishedMsgPayload]; // fired when a task has finished on this node
-    "more-usable-task-slots-become-available": [];   // fired when more enabled task slots become available for this node
+    "change": () => void;
+    "enabled": () => void;
+    "disabled": () => void;
+    "task-finished": (payload: TaskFinishedMsgPayload) => void; // fired when a task has finished on this node
 }
 
 export class Node extends EventEmitter {
@@ -41,10 +40,10 @@ export class Node extends EventEmitter {
         assert(this.totalTaskSlots > 0, `Total CPUs must be greater than 0 (node=${id}, totalTaskSlots=${totalTaskSlots})`);
         this._numAvailableTaskSlots = this.totalTaskSlots;
         const me = this;
-        this._connection.on("message", (event: string, data?: any) => {
+        this._connection.on("message", (event: string, data?: any) => { // the connection received a message
             if (event === "task-finished") {    // one task is finished on this node
                 me.increaseAvailableTaskSlots(1);   // increase the number of available task slots by 1
-                me.emit('task-finished', data as TaskFinishedMsgPayload);
+                me.safeEmit('task-finished', data as TaskFinishedMsgPayload);
             }
         });
     }
@@ -60,7 +59,7 @@ export class Node extends EventEmitter {
     // update the current loading info of this node, and emit 'change' event if the loading info has changed
     set currentLoading(loading: SystemLoadingInfo) {
         this._currentLoading = loading;
-        this.emit('change');
+        this.safeEmit('change');
     }
     get cpuUsagePercent(): number {
         return this._currentLoading.cpuUsagePercent;
@@ -82,7 +81,7 @@ export class Node extends EventEmitter {
             this._numAvailableTaskSlots = 0;
         }
         if (this._numAvailableTaskSlots !== old) {
-            this.emit('change');
+            this.safeEmit('change');
         }
     }
     increaseAvailableTaskSlots(count: number): void {
@@ -93,10 +92,7 @@ export class Node extends EventEmitter {
             this._numAvailableTaskSlots = this.totalTaskSlots;
         }
         if (this._numAvailableTaskSlots !== old) {
-            if (this._enabled && this._numAvailableTaskSlots > old) {
-                this.emit('more-usable-task-slots-become-available');
-            }
-            this.emit('change');
+            this.safeEmit('change');
         }
     }
     get utilizationPercent(): number {
@@ -112,15 +108,12 @@ export class Node extends EventEmitter {
     set enabled(value: boolean) {
         if (this._enabled !== value) {
             this._enabled = value;
-            if (this._enabled && this._numAvailableTaskSlots > 0) {  // disable -> enable
-                this.emit('more-usable-task-slots-become-available');
-            }
             if (this._enabled) {
-                this.emit('enabled');
+                this.safeEmit('enabled');
             } else {
-                this.emit('disabled');
+                this.safeEmit('disabled');
             }
-            this.emit('change');
+            this.safeEmit('change');
         }
     }
     get totalEnabledTaskSlots(): number {
@@ -186,81 +179,70 @@ export class Node extends EventEmitter {
     }
     on<K extends keyof NodeEvents>(
         event: K,
-        listener: (...args: NodeEvents[K]) => void
+        listener: NodeEvents[K]
     ): this {
         return super.on(event, listener);
     }
+    off<K extends keyof NodeEvents>(
+        event: K,
+        listener: NodeEvents[K]
+    ): this {
+        return super.off(event, listener);
+    }
     emit<K extends keyof NodeEvents>(
         event: K,
-        ...args: NodeEvents[K]
+        ...args: Parameters<NodeEvents[K]>
     ): boolean {
         return super.emit(event, ...args);
+    }
+    once<K extends keyof NodeEvents>(
+        event: K,
+        listener: NodeEvents[K]
+    ): this {
+        return super.once(event, listener);
+    }
+    safeEmit<U extends keyof NodeEvents>(
+        event: U, ...args: Parameters<NodeEvents[U]>
+    ): void {
+        try {
+            this.emit(event, ...args);
+        } catch (err) {
+            console.error(`Node "${event}" listener threw:`, err);
+        }
     }
 }
 
 export interface NodeTrackerEvents {
-    "change": [];
-    "usable-task-slots-become-available": [];   // fired when usable task slots become available (from unavailable to available)
-    "usable-task-slots-increased": [oldUsableTaskSlots: number];   // fired when more usable task slots become available
-    "node-added": [node: Node];
-    "node-removed": [node: Node];
-    "nodes-present": [];
-    "nodes-empty": [];
-    "task-finished-on-node": [node: Node, payload: TaskFinishedMsgPayload];
+    "change": () => void;   // fired when any change occurs in the nodes tracker
+    "node-added": (node: Node) => void;   // fired when a node is added
+    "node-removed": (node: Node) => void;   // fired when a node is removed
+    "nodes-present": () => void;    // fired when nodes are present (from empty to non-empty)
+    "nodes-empty": () => void;  // fired when no nodes are present (from non-empty to empty)
+    "task-finished-on-node": (node: Node, payload: TaskFinishedMsgPayload) => void; // fired when a task finishes on a node
 }
 
 export class NodesTracker extends EventEmitter implements INodeTaskDispatcher {
     private _nodes: Map<NodeId, Node> = new Map<NodeId, Node>();
     private _nodeList: Node[] = [];
-    private _numUsableTaskSlots: number = 0;    // current number of usable task slots across all nodes
     constructor() {
         super();
     }
-    private calculateNumberOfUsableTaskSlots(): number {
-        let total: number = 0;
-        for (const node of this._nodes.values()) {
-            total += node.numUsableTaskSlots;
-        }
-        return total;
-    }
+    // add a new node to the tracker
     addNode(node: Node): void {
         const oldNumNodes = this._nodes.size;
         this._nodes.set(node.id, node);
         this._nodeList.push(node);
-        const me = this;
         node.on('change', () => {
-            const oldUsableTaskSlots = me._numUsableTaskSlots;
-            const newUsableTaskSlots = me.calculateNumberOfUsableTaskSlots();
-            if (newUsableTaskSlots !== oldUsableTaskSlots) {
-                me._numUsableTaskSlots = newUsableTaskSlots;
-            }
-            if (oldUsableTaskSlots === 0 && newUsableTaskSlots > 0) {   // no task slots available before, now available
-                me.emit('usable-task-slots-become-available');
-            }
-            if (newUsableTaskSlots > oldUsableTaskSlots) {
-                me.emit('usable-task-slots-increased', oldUsableTaskSlots);
-            }
-            me.emit('change'); 
+            this.safeEmit('change');
         }).on('task-finished', (payload) => {
-            me.emit('task-finished-on-node', node, payload);
+            this.safeEmit('task-finished-on-node', node, payload);
         });
-        const oldUsableTaskSlots = this._numUsableTaskSlots;
-        const newUsableTaskSlots = this.calculateNumberOfUsableTaskSlots();
-        if (newUsableTaskSlots !== oldUsableTaskSlots) {
-            this._numUsableTaskSlots = newUsableTaskSlots;
-        }
-        if (oldUsableTaskSlots === 0 && newUsableTaskSlots > 0) {   // no task slots available before, now available
-            this.emit('usable-task-slots-become-available');
-        }
-        if (newUsableTaskSlots > oldUsableTaskSlots) {
-            this.emit('usable-task-slots-increased', oldUsableTaskSlots);
-        }
-        this.emit('node-added', node);
-        this.emit('change');
+        this.safeEmit('node-added', node);
+        this.safeEmit('change');
         const newNumNodes = this._nodes.size;
         if (oldNumNodes == 0 && newNumNodes > 0) {  // the first node has been added
             // The first node has been added
-            this.emit('nodes-present');
+            this.safeEmit('nodes-present');
         }
     }
     // get a node by its ID, throw error if not found
@@ -273,6 +255,7 @@ export class NodesTracker extends EventEmitter implements INodeTaskDispatcher {
         }
         return node;
     }
+    // remove a node from the tracker by its ID
     removeNode(nodeId: NodeId): void {
         const oldNumNodes = this._nodes.size;
         const node = this._nodes.get(nodeId);
@@ -283,30 +266,45 @@ export class NodesTracker extends EventEmitter implements INodeTaskDispatcher {
                 this._nodeList.splice(index, 1);
             }
             node.removeAllListeners();
-            this._numUsableTaskSlots = this.calculateNumberOfUsableTaskSlots();
-            this.emit('node-removed', node);
-            this.emit('change'); 
+            this.safeEmit('node-removed', node);
+            this.safeEmit('change'); 
         }
         const newNumNodes = this._nodes.size;
         if (oldNumNodes > 0 && newNumNodes === 0) {
-            this.emit('nodes-empty');
+            this.safeEmit('nodes-empty');
         }
     }
+    // enable or disable a node by its ID
     setNodeEnabled(nodeId: NodeId, enabled: boolean): void {
         const node = this._nodes.get(nodeId);
         if (node) {
             node.enabled = enabled;
         }
     }
+    isNodeEnabled(nodeId: NodeId): boolean {
+        const node = this._nodes.get(nodeId);
+        if (node) {
+            return node.enabled;
+        } else {
+            throw new Error(`Node with ID ${nodeId} not found`);
+        }
+    }
     get numNodes(): number {
         return this._nodes.size;
     }
+    // Get the total number of usable task slots across all nodes
     get numUsableTaskSlots(): number {
-        return this._numUsableTaskSlots;
+        let total: number = 0;
+        for (const node of this._nodes.values()) {
+            total += node.numUsableTaskSlots;
+        }
+        return total;
     }
+    // Returns whether there are any usable task slots available across all nodes
     get hasUsableTaskSlots(): boolean {
-        return this._numUsableTaskSlots > 0;
+        return (this.numUsableTaskSlots > 0);
     }
+    // Get the list of all usable task slots across all nodes
     get usableTaskSlots(): TaskSlots {
         const taskSlots: TaskSlots = [];
         for (const node of this._nodes.values()) {  // for each node
@@ -359,14 +357,36 @@ export class NodesTracker extends EventEmitter implements INodeTaskDispatcher {
     }
     on<K extends keyof NodeTrackerEvents>(
         event: K,
-        listener: (...args: NodeTrackerEvents[K]) => void
+        listener: NodeTrackerEvents[K]
     ): this {
         return super.on(event, listener);
     }
+    off<K extends keyof NodeTrackerEvents>(
+        event: K,
+        listener: NodeTrackerEvents[K]
+    ): this {
+        return super.off(event, listener);
+    }
     emit<K extends keyof NodeTrackerEvents>(
         event: K,
-        ...args: NodeTrackerEvents[K]
+        ...args: Parameters<NodeTrackerEvents[K]>
     ): boolean {
         return super.emit(event, ...args);
+    }
+    once<K extends keyof NodeTrackerEvents>(
+        event: K,
+        listener: NodeTrackerEvents[K]
+    ): this {
+        return super.once(event, listener);
+    }
+    safeEmit<K extends keyof NodeTrackerEvents>(
+        event: K,
+        ...args: Parameters<NodeTrackerEvents[K]>
+    ): void {
+        try {
+            super.emit(event, ...args);
+        } catch (error) {
+            console.error(`NodesTracker "${event}" listener threw:`, error);
+        }
     }
 }
