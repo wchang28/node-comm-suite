@@ -4,13 +4,13 @@ import { getRandomInt } from '../../utils.js';
 import {JobId, TaskIndex, TaskItems} from "../types.js";
 
 export interface QueueEvents {
-    "tasks-queued": [];
-    "job-queued": [jobId: JobId, numTasks: number];
-    "job-dequeued": [jobId: JobId];
-    "queue-empty": [];
-    "opened": [];
-    "closed": [];
-    "change": [];
+    "tasks-queued": () => void;
+    "job-queued": (jobId: JobId, numTasks: number) => void;
+    "job-dequeued": (jobId: JobId) => void;
+    "queue-empty": () => void;
+    "opened": () => void;
+    "closed": () => void;
+    "change": () => void;
 }
 
 export interface QueueJSON {
@@ -28,6 +28,40 @@ export class Queue extends EventEmitter {
     private _jobsList: JobId[] = [];
     constructor() {
         super();
+    }
+    on<K extends keyof QueueEvents>(
+        event: K,
+        listener: QueueEvents[K]
+    ): this {
+        return super.on(event, listener);
+    }
+    off<K extends keyof QueueEvents>(
+        event: K,
+        listener: QueueEvents[K]
+    ): this {
+        return super.off(event, listener);
+    }
+    emit<K extends keyof QueueEvents>(
+        event: K,
+        ...args: Parameters<QueueEvents[K]>
+    ): boolean {
+        return super.emit(event, ...args);
+    }
+    once<K extends keyof QueueEvents>(
+        event: K,
+        listener: QueueEvents[K]
+    ): this {
+        return super.once(event, listener);
+    }
+    safeEmit<K extends keyof QueueEvents>(
+        event: K,
+        ...args: Parameters<QueueEvents[K]>
+    ): void {
+        try {
+            super.emit(event, ...args);
+        } catch (err) {
+            console.error(`Queue "${event}" listener threw:`, err);
+        }
     }
     hasJob(jobId: JobId): boolean {
         return this._queue.has(jobId);
@@ -52,24 +86,12 @@ export class Queue extends EventEmitter {
         if (this._closed !== value) {
             this._closed = value;
             if (this._closed) {
-                this.emit("closed");
+                this.safeEmit("closed");
             } else {
-                this.emit("opened");
+                this.safeEmit("opened");
             }
-            this.emit("change");
+            this.safeEmit("change");
         }
-    }
-    on<K extends keyof QueueEvents>(
-        event: K,
-        listener: (...args: QueueEvents[K]) => void
-    ): this {
-        return super.on(event, listener);
-    }
-    emit<K extends keyof QueueEvents>(
-        event: K,
-        ...args: QueueEvents[K]
-    ): boolean {
-        return super.emit(event, ...args);
     }
     queueJob(jobId: JobId, numTasks: number): void {
         if (this._closed) {
@@ -79,9 +101,9 @@ export class Queue extends EventEmitter {
         assert(numTasks > 0, `Number of tasks must be greater than zero for job ${jobId}.`);
         this._queue.set(jobId, Array.from({ length: numTasks }, (_, i) => i));
         this._jobsList.push(jobId);
-        this.emit("job-queued", jobId, numTasks);
-        this.emit("tasks-queued");
-        this.emit("change");
+        this.safeEmit("job-queued", jobId, numTasks);
+        this.safeEmit("tasks-queued");
+        this.safeEmit("change");
     }
     // call this when you are killing a job
     removeJob(jobId: JobId): void {
@@ -90,9 +112,9 @@ export class Queue extends EventEmitter {
             assert(index !== -1, `Job ID ${jobId} not found in jobs list.`);
             this._jobsList.splice(index, 1);
             if (this.isEmpty) {
-                this.emit("queue-empty");
+                this.safeEmit("queue-empty");
             }
-            this.emit("change");
+            this.safeEmit("change");
         }
     }
     dequeueTasks(maxTasksToDequeue: number): TaskItems {
@@ -114,14 +136,14 @@ export class Queue extends EventEmitter {
             if (jobTasks && jobTasks.length === 0) {
                 this._queue.delete(jobIdPicked);
                 this._jobsList.splice(jobIndexPicked, 1);
-                this.emit("job-dequeued", jobIdPicked);
+                this.safeEmit("job-dequeued", jobIdPicked);
                 if (this.isEmpty) {
-                    this.emit("queue-empty");
+                    this.safeEmit("queue-empty");
                 }
             }
         }
         if (ret.length > 0) {
-            this.emit("change");
+            this.safeEmit("change");
         }
         return ret;
     }
