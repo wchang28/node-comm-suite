@@ -8,6 +8,7 @@ export interface MostRecentJobsMonitorEvents {
     "pooling-error": (error: any) => void;
     "change": () => void;
     "started": () => void;
+    "stopping": () => void;
     "stopped": () => void;
 }
 
@@ -29,6 +30,7 @@ export interface IMostRecentJobsMonitor {
     toJSON(): Job[];
 }
 
+// monitor class for most recent jobs
 export class MostRecentJobsMonitor extends EventEmitter implements IMostRecentJobsMonitor {
     private readonly pooling_: Pooling<Job[]>;
     private currentJSON: string;
@@ -50,6 +52,8 @@ export class MostRecentJobsMonitor extends EventEmitter implements IMostRecentJo
             }
         }).on("started", () => {
             this.safeEmit("started");
+        }).on("stopping", () => {
+            this.safeEmit("stopping");
         }).on("stopped", () => {
             this.safeEmit("stopped");
         });

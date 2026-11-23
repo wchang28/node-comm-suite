@@ -11,8 +11,9 @@ import { RequestGetSet } from "./request-get-set.js";
 import { router as dispatcherRouter } from './dispatcher/index.js';
 import { router as jobRouter } from './job/index.js';
 import { IDispatcherAbstraction } from './types.js';
-import { ClientConnectionsMonitor } from './client-connections-monitor.js';
+import { DispatchMonitor } from './dispatch-monitor.js';
 import { MostRecentJobsMonitor } from './most-recent-jobs-monitor.js';
+import { ClientConnectionsMonitor } from './client-connections-monitor.js';
 
 const PORT: number = (process.env.PORT ? parseInt(process.env.PORT) : 8080);
 const LISTEN_HOST: string = process.env.LISTEN_HOST || '0.0.0.0';
@@ -63,6 +64,8 @@ dispatcher.on("dispatching", (sessionId) => {
     console.log(`Dispatcher <<disabled>>`);
 }).on("started", () => {
     console.log(`Dispatcher <<started>>`);
+}).on("stopping", () => {
+    console.log(`Dispatcher <<stopping>>`);
 }).on("stopped", () => {
     console.log(`Dispatcher <<stopped>>`);
 }).start();
@@ -89,12 +92,6 @@ jobKiller.on("killing", (jobId) => {
     console.log(`JobKiller <<change>>:`, JSON.stringify(jobKiller.toJSON()));
 });
 
-const tasksQueue = dispatcher.queue;
-
-tasksQueue.on("change", () => {
-    
-});
-
 const taskLauncherRouter = express.Router();
 app.use('/task-launcher', taskLauncherRouter);
 // SSE endpoint for task launcher: /task-launcher/events
@@ -114,12 +111,31 @@ clientConnectionsMonitor.on("change", () => {
     connectionsMonitorConnectionManager.broadcastNotification("change", clientConnectionsMonitor.toJSON());
 });
 
+const dispatchMonitor = new DispatchMonitor(dispatcher, 1000);
+dispatchMonitor.on("queue-change", (data) => {
+    console.log(`DispatchMonitor <<queue-change>>:`, JSON.stringify(data));
+}).on("nodes-change", (data) => {
+    console.log(`DispatchMonitor <<nodes-change>>:`, JSON.stringify(data));
+}).on("job-killer-change", (data) => {
+    console.log(`DispatchMonitor <<job-killer-change>>:`, JSON.stringify(data));
+}).on("dispatcher-change", (data) => {
+    console.log(`DispatchMonitor <<dispatcher-change>>:`, JSON.stringify(data));
+}).on("started", () => {
+    console.log("DispatchMonitor <<started>>");
+}).on("stopping", () => {
+    console.log("DispatchMonitor <<stopping>>");
+}).on("stopped", () => {
+    console.log("DispatchMonitor <<stopped>>");
+}).start();
+
 const mostRecentJobsMonitor = new MostRecentJobsMonitor(poolDataPlaneDBPool, 300, 500);
 mostRecentJobsMonitor
 .on("change", () => {
     recentJobsMonitorConnectionManager.broadcastNotification("change", mostRecentJobsMonitor.toJSON());
 }).on("started", () => {
     console.log("MostRecentJobsMonitor <<started>>");
+}).on("stopping", () => {
+    console.log("MostRecentJobsMonitor <<stopping>>");
 }).on("stopped", () => {
     console.log("MostRecentJobsMonitor <<stopped>>");
 }).start();
@@ -279,6 +295,7 @@ for (const sig of ['SIGTERM', 'SIGINT'] as const) {
         const promises = Promise.all([
             serverClosedPromise,
             dispatcher.stop(),
+            dispatchMonitor.stop(),
             mostRecentJobsMonitor.stop()
         ]);
         promises.then(() => {

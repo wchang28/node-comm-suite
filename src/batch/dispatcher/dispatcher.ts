@@ -8,6 +8,7 @@ import { NodesJobKiller, JobKillStatRow } from './nodes-job-killer.js';
 import {Pooling} from "../../pooling.js";
 
 export interface DispatcherEvents {
+    "change": () => void;
     "enabled": () => void;
     "disabled": () => void;
     "dispatching": (sessionId: string) => void;
@@ -15,14 +16,19 @@ export interface DispatcherEvents {
     "node-to-be-dispatched-one-task": (nodeId: NodeId, taskItem: TaskItem) => void;
     "one-task-dispatched": (resultRow: DispatchResultRow) => void;
     "started": () => void;
+    "stopping": () => void;
     "stopped": () => void;
 }
 
-export interface DispatcherJSON {
+export interface DispatcherStates {
     enabled: boolean;
+    dispatching: boolean;
+}
+
+export interface DispatcherJSON {
+    states: DispatcherStates;
     queue: QueueJSON;
     nodes: NodeInfoRow[];
-    dispatching: boolean;
     jobsKillStats: JobKillStatRow[];
 }
 
@@ -62,6 +68,13 @@ export class Dispatcher extends EventEmitter {
         const nodesSystemLoadPooling = new Pooling<void>(async () => {
             await this.nodesTracker.updateNodesSystemLoading();
         }, 30000);  // update system loading every 30 seconds
+        nodesSystemLoadPooling.on("started", () => {
+            this.safeEmit('started');
+        }).on("stopping", () => {
+            this.safeEmit('stopping');
+        }).on("stopped", () => {
+            this.safeEmit('stopped');
+        });
         this._nodesSystemLoadPooling = nodesSystemLoadPooling;
     }
     get enabled(): boolean {
@@ -75,6 +88,7 @@ export class Dispatcher extends EventEmitter {
             } else {
                 this.safeEmit('disabled');
             }
+            this.safeEmit('change');
         }
     }
     get dispatching(): boolean {
@@ -100,10 +114,12 @@ export class Dispatcher extends EventEmitter {
         if (this._currentDispatchSession == null && session !== null) { // Idle -> Dispatching
             this._currentDispatchSession = session;
             this.safeEmit('dispatching', session.sessionId);
+            this.safeEmit('change');
         } else if (this._currentDispatchSession !== null && session === null) { // Dispatching -> Idle
             const oldSession = this._currentDispatchSession;
             this._currentDispatchSession = null;
             this.safeEmit('dispatch-completed', oldSession);
+            this.safeEmit('change');
         }
     }
     private async dispatchTasksIfNecessary() {
@@ -145,18 +161,21 @@ export class Dispatcher extends EventEmitter {
     }
     start() {
         this._nodesSystemLoadPooling.start();
-        this.safeEmit("started");
     }
     async stop() {
         await this._nodesSystemLoadPooling.stop();
-        this.safeEmit("stopped");
+    }
+    get states(): DispatcherStates {
+        return {
+            enabled: this._enabled,
+            dispatching: this.dispatching
+        };
     }
     toJSON(): DispatcherJSON {
         return {
-            enabled: this._enabled,
+            states: this.states,
             queue: this.queue.toJSON(),
             nodes: this.nodesTracker.toJSON(),
-            dispatching: this.dispatching,
             jobsKillStats: this.nodesJobKiller.toJSON()
         };
     }
