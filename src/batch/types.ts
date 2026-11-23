@@ -1,3 +1,5 @@
+import { ConnectionId } from "../sse-server.js";
+
 export type JobId = string;
 export type TaskIndex = number;
 export type TaskItem = { j: JobId; t: TaskIndex };
@@ -215,4 +217,14 @@ export interface DispatcherJSON {
     queue: QueueJSON;
     nodes: NodesTrackerJSON;
     jobsKillStats: JobKillStatRow[];
+}
+
+export type ClientMonitoringTopic = "dispatcher" | "recent-jobs" | "connections";
+
+export interface ClientConnectionItem {
+    topic: ClientMonitoringTopic;
+    connId: ConnectionId;
+    remoteAddress: string;
+    userId: string;
+    userName: string;
 }

@@ -1,17 +1,7 @@
 import { EventEmitter } from "node:events";
 import {ConnectionManager} from "../../sse-request/connection-manager.js";
-import type {ConnectionId} from "../../sse-request/types.js";
 import {RequestGetSet}  from "./request-get-set.js";
-
-export type ClientMonitoringTopic = "dispatcher" | "recent-jobs" | "connections";
-
-export interface ClientConnectionItem {
-    topic: ClientMonitoringTopic;
-    connId: ConnectionId;
-    remoteAddress: string;
-    userId: string;
-    userName: string;
-}
+import type {ClientMonitoringTopic, ClientConnectionItem} from "../types.js";
 
 export interface ClientConnectionsMonitorEvents {
     "change": () => void;
