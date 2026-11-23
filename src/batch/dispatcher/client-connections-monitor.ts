@@ -17,6 +17,7 @@ export interface ClientConnectionsMonitorEvents {
     "change": () => void;
 }
 
+// class that monitors client connections for different topics and emits change events when the connection lists change
 export class ClientConnectionsMonitor extends EventEmitter {
     constructor(
         private dispatcherMonitorConnectionManager: ConnectionManager,

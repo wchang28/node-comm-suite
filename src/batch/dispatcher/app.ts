@@ -113,13 +113,13 @@ clientConnectionsMonitor.on("change", () => {
 
 const dispatchMonitor = new DispatchMonitor(dispatcher, 1000);
 dispatchMonitor.on("queue-change", (data) => {
-    console.log(`DispatchMonitor <<queue-change>>:`, JSON.stringify(data));
+    dispatcherMonitorConnectionManager.broadcastNotification("queue-change", data);
 }).on("nodes-change", (data) => {
-    console.log(`DispatchMonitor <<nodes-change>>:`, JSON.stringify(data));
+    dispatcherMonitorConnectionManager.broadcastNotification("nodes-change", data);
 }).on("job-killer-change", (data) => {
-    console.log(`DispatchMonitor <<job-killer-change>>:`, JSON.stringify(data));
+    dispatcherMonitorConnectionManager.broadcastNotification("job-killer-change", data);
 }).on("dispatcher-change", (data) => {
-    console.log(`DispatchMonitor <<dispatcher-change>>:`, JSON.stringify(data));
+    dispatcherMonitorConnectionManager.broadcastNotification("dispatcher-change", data);
 }).on("started", () => {
     console.log("DispatchMonitor <<started>>");
 }).on("stopping", () => {
