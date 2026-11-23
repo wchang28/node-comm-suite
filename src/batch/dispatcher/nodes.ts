@@ -58,8 +58,12 @@ export class Node extends EventEmitter {
     }
     // update the current loading info of this node, and emit 'change' event if the loading info has changed
     private set currentLoading(loading: SystemLoadingInfo) {
+        const oldLoadingJSON = JSON.stringify(this._currentLoading);
+        const newLoadingJSON = JSON.stringify(loading);
         this._currentLoading = loading;
-        this.safeEmit('change');
+        if (oldLoadingJSON !== newLoadingJSON) {
+            this.safeEmit('change');
+        }
     }
     get cpuUsagePercent(): number {
         return this._currentLoading.cpuUsagePercent;
