@@ -57,7 +57,7 @@ export class Node extends EventEmitter {
         return this._currentLoading;
     }
     // update the current loading info of this node, and emit 'change' event if the loading info has changed
-    set currentLoading(loading: SystemLoadingInfo) {
+    private set currentLoading(loading: SystemLoadingInfo) {
         this._currentLoading = loading;
         this.safeEmit('change');
     }
@@ -134,6 +134,7 @@ export class Node extends EventEmitter {
     get remoteSocketAddress(): string {
         return this._connection.remoteSocketAddress;
     }
+    // make a request to the node
     async request<T>(url: string, method: string, body?: any, headers?: {[key: string]: string}): Promise<T> {
         return this._connection.request<T>(url, method, body, headers);
     }
@@ -159,6 +160,12 @@ export class Node extends EventEmitter {
     }
     async getHealth() {
         return this.request<NodeHealthInfo>("/health", "GET");
+    }
+    async updateSystemLoading() {
+        try {
+            const loading = await this.request<SystemLoadingInfo>("/system-loading", "GET");
+            this.currentLoading = loading;
+        } catch (_) {}
     }
     toJSON(): NodeInfoRow {
         return {
@@ -346,8 +353,15 @@ export class NodesTracker extends EventEmitter implements INodeTaskDispatcher {
         const numProcessesKilled = results.reduce((accumulator, current) => accumulator + current, 0);
         return numProcessesKilled;
     }
+    // get the current health information for a specific node
     async getNodeHealth(nodeId: NodeId) {
         return await this.getNode(nodeId).getHealth();
+    }
+    // updated system loading information for all nodes
+    async updateNodesSystemLoading() {
+        const nodes = Array.from(this._nodes.values());
+        const promises = nodes.map(node => node.updateSystemLoading());
+        await Promise.all(promises);
     }
     get nodesSessionIds(): NodeSessionId[] {
         return this._nodeList.map(node => node.sessionId);
