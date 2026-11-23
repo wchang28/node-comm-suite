@@ -47,7 +47,7 @@ export class Dispatcher extends EventEmitter {
         this.queue.on("tasks-queued", () => {
             this.dispatchTasksIfNecessary();
         });
-        this.nodesTracker.on("change", () => {
+        this.nodesTracker.on("task-slots-change", () => {
             this.dispatchTasksIfNecessary();
         });
         this.on("enabled", () => {

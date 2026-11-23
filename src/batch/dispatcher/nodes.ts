@@ -25,6 +25,7 @@ export interface NodeEvents {
     "change": () => void;
     "enabled": () => void;
     "disabled": () => void;
+    "task-slots-change": () => void; // fire when any (available/usable) task slots related change
     "task-finished": (payload: TaskFinishedMsgPayload) => void; // fired when a task has finished on this node
 }
 
@@ -35,15 +36,14 @@ export class Node extends EventEmitter {
         super();
         assert(this.id, "Node ID must be defined");
         assert(this.id === this._connection.connId, `Node ID ${this.id} must match connection ID ${this._connection.connId}`);
-        assert(this.sessionId, `Node session ID must be defined (node=${id})`);
+        assert(this.sessionId, `Node session ID musst be defined (node=${id})`);
         assert(this.hostname, `Node hostname must be defined (node=${id})`);
         assert(this.totalTaskSlots > 0, `Total CPUs must be greater than 0 (node=${id}, totalTaskSlots=${totalTaskSlots})`);
         this._numAvailableTaskSlots = this.totalTaskSlots;
-        const me = this;
         this._connection.on("message", (event: string, data?: any) => { // the connection received a message
             if (event === "task-finished") {    // one task is finished on this node
-                me.increaseAvailableTaskSlots(1);   // increase the number of available task slots by 1
-                me.safeEmit('task-finished', data as TaskFinishedMsgPayload);
+                this.increaseAvailableTaskSlots(1);   // increase the number of available task slots by 1
+                this.safeEmit('task-finished', data as TaskFinishedMsgPayload);
             }
         });
     }
@@ -81,6 +81,7 @@ export class Node extends EventEmitter {
             this._numAvailableTaskSlots = 0;
         }
         if (this._numAvailableTaskSlots !== old) {
+            this.safeEmit('task-slots-change');
             this.safeEmit('change');
         }
     }
@@ -92,6 +93,7 @@ export class Node extends EventEmitter {
             this._numAvailableTaskSlots = this.totalTaskSlots;
         }
         if (this._numAvailableTaskSlots !== old) {
+            this.safeEmit('task-slots-change');
             this.safeEmit('change');
         }
     }
@@ -113,6 +115,7 @@ export class Node extends EventEmitter {
             } else {
                 this.safeEmit('disabled');
             }
+            this.safeEmit('task-slots-change');
             this.safeEmit('change');
         }
     }
@@ -221,6 +224,7 @@ export class Node extends EventEmitter {
 
 export interface NodeTrackerEvents {
     "change": () => void;   // fired when any change occurs in the nodes tracker
+    "task-slots-change": () => void; // fired when any (available/usable) task slots related change
     "node-added": (node: Node) => void;   // fired when a node is added
     "node-removed": (node: Node) => void;   // fired when a node is removed
     "nodes-present": () => void;    // fired when nodes are present (from empty to non-empty)
@@ -241,10 +245,13 @@ export class NodesTracker extends EventEmitter implements INodeTaskDispatcher {
         this._nodeList.push(node);
         node.on('change', () => {
             this.safeEmit('change');
+        }).on('task-slots-change', () => {
+            this.safeEmit('task-slots-change');
         }).on('task-finished', (payload) => {
             this.safeEmit('task-finished-on-node', node, payload);
         });
         this.safeEmit('node-added', node);
+        this.safeEmit('task-slots-change');
         this.safeEmit('change');
         const newNumNodes = this._nodes.size;
         if (oldNumNodes == 0 && newNumNodes > 0) {  // the first node has been added
@@ -274,6 +281,7 @@ export class NodesTracker extends EventEmitter implements INodeTaskDispatcher {
             }
             node.removeAllListeners();
             this.safeEmit('node-removed', node);
+            this.safeEmit('task-slots-change');
             this.safeEmit('change'); 
         }
         const newNumNodes = this._nodes.size;
