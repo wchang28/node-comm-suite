@@ -1,4 +1,5 @@
 import {Client} from "../../sse-request/client.js";
+import {Job} from "../types.js";
 
 const EVENT_URL = process.env.EVENT_URL || "http://localhost:8080/recent-jobs/events";
 
@@ -11,7 +12,8 @@ client.on("ready", () => {
     console.log("Connection ID changed from", oldConnId, "to", newConnId);
 }).on("event-notify", (event, data) => {
     console.log(`Event notify received: <<${event}>>`);
-    console.table(data);
+    const d = data as Job[];
+    console.table(d);
 }).on("ping", (timestamp) => {
     console.log("Ping received at:", timestamp);
 }).connect();

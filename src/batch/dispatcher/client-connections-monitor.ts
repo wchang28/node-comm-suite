@@ -3,10 +3,10 @@ import {ConnectionManager} from "../../sse-request/connection-manager.js";
 import type {ConnectionId} from "../../sse-request/types.js";
 import {RequestGetSet}  from "./request-get-set.js";
 
-export type MonitoringTopic = "dispatcher" | "recent-jobs" | "connections";
+export type ClientMonitoringTopic = "dispatcher" | "recent-jobs" | "connections";
 
 export interface ClientConnectionItem {
-    topic: MonitoringTopic;
+    topic: ClientMonitoringTopic;
     connId: ConnectionId;
     remoteAddress: string;
     userId: string;
@@ -63,10 +63,10 @@ export class ClientConnectionsMonitor extends EventEmitter {
         }
     }
     private getMonitorConnectionItems(
-        topic: MonitoringTopic,
+        topic: ClientMonitoringTopic,
         connectionManager: ConnectionManager
     ): ClientConnectionItem[] {
-        return connectionManager.connections.map(connection => {
+        return connectionManager.connections.map(connection => {    // for each connection
             const req_gs = new RequestGetSet(connection.req);
             const user = req_gs.user;
             return {
