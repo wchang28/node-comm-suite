@@ -420,7 +420,7 @@ export class ConnectionManager extends EventEmitter {
     get numConnections(): number {
         return this._connectionLists.length;
     }
-    get connectionLists(): Connection[] {
-        return this._connectionLists;
+    get connections(): Connection[] {
+        return [...this._connectionLists];
     }
 }

@@ -97,29 +97,29 @@ app.use('/task-launcher', taskLauncherRouter);
 // SSE endpoint for task launcher: /task-launcher/events
 nodesConnectionManager.setupExpressRouter(taskLauncherRouter, "/events");
 
-const dispatcherMonitorConnectionManager = new RequestConnectionManager(PING_INTERVAL_MS, REQUEST_TIMEOUT_MS);
-const recentJobsMonitorConnectionManager = new RequestConnectionManager(PING_INTERVAL_MS, REQUEST_TIMEOUT_MS);
-const connectionsMonitorConnectionManager = new RequestConnectionManager(PING_INTERVAL_MS, REQUEST_TIMEOUT_MS);
+const dispatcherEventsConnector = new RequestConnectionManager(PING_INTERVAL_MS, REQUEST_TIMEOUT_MS);
+const recentJobsEventsConnector = new RequestConnectionManager(PING_INTERVAL_MS, REQUEST_TIMEOUT_MS);
+const connectionsEventsConnector = new RequestConnectionManager(PING_INTERVAL_MS, REQUEST_TIMEOUT_MS);
 
 const clientConnectionsMonitor = new ClientConnectionsMonitor(
-    dispatcherMonitorConnectionManager,
-    recentJobsMonitorConnectionManager,
-    connectionsMonitorConnectionManager
+    dispatcherEventsConnector,
+    recentJobsEventsConnector,
+    connectionsEventsConnector
 );
 
 clientConnectionsMonitor.on("change", () => {
-    connectionsMonitorConnectionManager.broadcastNotification("change", clientConnectionsMonitor.toJSON());
+    connectionsEventsConnector.broadcastNotification("change", clientConnectionsMonitor.toJSON());
 });
 
 const dispatchMonitor = new DispatchMonitor(dispatcher, 1000);
 dispatchMonitor.on("queue-change", (data) => {
-    dispatcherMonitorConnectionManager.broadcastNotification("queue-change", data);
+    dispatcherEventsConnector.broadcastNotification("queue-change", data);
 }).on("nodes-change", (data) => {
-    dispatcherMonitorConnectionManager.broadcastNotification("nodes-change", data);
+    dispatcherEventsConnector.broadcastNotification("nodes-change", data);
 }).on("job-killer-change", (data) => {
-    dispatcherMonitorConnectionManager.broadcastNotification("job-killer-change", data);
+    dispatcherEventsConnector.broadcastNotification("job-killer-change", data);
 }).on("dispatcher-change", (data) => {
-    dispatcherMonitorConnectionManager.broadcastNotification("dispatcher-change", data);
+    dispatcherEventsConnector.broadcastNotification("dispatcher-change", data);
 }).on("started", () => {
     console.log("DispatchMonitor <<started>>");
 }).on("stopping", () => {
@@ -131,7 +131,7 @@ dispatchMonitor.on("queue-change", (data) => {
 const mostRecentJobsMonitor = new MostRecentJobsMonitor(poolDataPlaneDBPool, 300, 500);
 mostRecentJobsMonitor
 .on("change", () => {
-    recentJobsMonitorConnectionManager.broadcastNotification("change", mostRecentJobsMonitor.toJSON());
+    recentJobsEventsConnector.broadcastNotification("change", mostRecentJobsMonitor.toJSON());
 }).on("started", () => {
     console.log("MostRecentJobsMonitor <<started>>");
 }).on("stopping", () => {
@@ -215,7 +215,7 @@ app.get("/me", (req: Request, res: Response) => {
 
 app.use('/dispatcher', dispatcherRouter);
 // SSE endpoint for dispatcher monitor: /dispatcher/events
-dispatcherMonitorConnectionManager.setupExpressRouter(dispatcherRouter, "/events");
+dispatcherEventsConnector.setupExpressRouter(dispatcherRouter, "/events");
 
 const recentJobsRouter = express.Router();
 app.use('/recent-jobs', recentJobsRouter);
@@ -223,7 +223,7 @@ recentJobsRouter.get("/", (req: Request, res: Response) => {
     res.json(mostRecentJobsMonitor.toJSON());
 });
 // SSE endpoint for recent jobs monitor: /recent-jobs/events
-recentJobsMonitorConnectionManager.setupExpressRouter(recentJobsRouter, "/events");
+recentJobsEventsConnector.setupExpressRouter(recentJobsRouter, "/events");
 
 const clientConnectionsRouter = express.Router();
 app.use('/client-connections', clientConnectionsRouter);
@@ -231,7 +231,7 @@ clientConnectionsRouter.get("/", (req: Request, res: Response) => {
     res.json(clientConnectionsMonitor.toJSON());
 });
 // SSE endpoint for connections monitor: /client-connections/events
-connectionsMonitorConnectionManager.setupExpressRouter(clientConnectionsRouter, "/events");
+connectionsEventsConnector.setupExpressRouter(clientConnectionsRouter, "/events");
 
 app.use('/job', jobRouter);
 

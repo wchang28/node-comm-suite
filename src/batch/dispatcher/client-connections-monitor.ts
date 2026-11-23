@@ -20,14 +20,14 @@ export interface ClientConnectionsMonitorEvents {
 // class that monitors client connections for different topics and emits change events when the connection lists change
 export class ClientConnectionsMonitor extends EventEmitter {
     constructor(
-        private dispatcherMonitorConnectionManager: ConnectionManager,
-        private recentJobsMonitorConnectionManager: ConnectionManager,
-        private connectionsMonitorConnectionManager: ConnectionManager
+        private dispatcherEventsConnector: ConnectionManager,
+        private recentJobsEventsConnector: ConnectionManager,
+        private connectionsEventsConnector: ConnectionManager
     ) {
         super();
-        dispatcherMonitorConnectionManager.on("change", () => this.safeEmit("change"));
-        recentJobsMonitorConnectionManager.on("change", () => this.safeEmit("change"));
-        connectionsMonitorConnectionManager.on("change", () => this.safeEmit("change"));
+        dispatcherEventsConnector.on("change", () => this.safeEmit("change"));
+        recentJobsEventsConnector.on("change", () => this.safeEmit("change"));
+        connectionsEventsConnector.on("change", () => this.safeEmit("change"));
     }
     on<K extends keyof ClientConnectionsMonitorEvents>(
         event: K,
@@ -66,13 +66,13 @@ export class ClientConnectionsMonitor extends EventEmitter {
         topic: MonitoringTopic,
         connectionManager: ConnectionManager
     ): ClientConnectionItem[] {
-        return connectionManager.connectionLists.map(conn => {
-            const req_gs = new RequestGetSet(conn.req);
+        return connectionManager.connections.map(connection => {
+            const req_gs = new RequestGetSet(connection.req);
             const user = req_gs.user;
             return {
                 topic,
-                connId: conn.connId,
-                remoteAddress: conn.remoteSocketAddress,
+                connId: connection.connId,
+                remoteAddress: connection.remoteSocketAddress,
                 userId: user?.id ?? "",
                 userName: user?.name ?? ""
             };
@@ -80,9 +80,9 @@ export class ClientConnectionsMonitor extends EventEmitter {
     }
     toJSON(): ClientConnectionItem[] {
         return [
-            ...this.getMonitorConnectionItems("dispatcher", this.dispatcherMonitorConnectionManager),
-            ...this.getMonitorConnectionItems("recent-jobs", this.recentJobsMonitorConnectionManager),
-            ...this.getMonitorConnectionItems("connections", this.connectionsMonitorConnectionManager)
+            ...this.getMonitorConnectionItems("dispatcher", this.dispatcherEventsConnector),
+            ...this.getMonitorConnectionItems("recent-jobs", this.recentJobsEventsConnector),
+            ...this.getMonitorConnectionItems("connections", this.connectionsEventsConnector)
         ];
     }
 }

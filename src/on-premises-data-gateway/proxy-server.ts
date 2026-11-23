@@ -44,16 +44,16 @@ connectionManager.on("connected", async (connection) => {
 connectionManager.setupExpressRouter(agentRouter, "/events");
 
 const agentConnectedCheckMiddleware = (req: Request, res: Response, next: NextFunction) => {
-    const conns = connectionManager.connectionLists;
+    const conns = connectionManager.connections;
     if (conns.length == 0) {    // no agent client connection at this moment
         // wait for 3 seconds to see if an agent client connection becomes available
         const timer = setTimeout(() => {
             // 3 seconds have passed, check if an agent client is connected
             clearTimeout(timer);    // clear the timeout
-            if (connectionManager.connectionLists.length == 0) {    // still no agent client connection
+            if (connectionManager.connections.length == 0) {    // still no agent client connection
                 res.status(503).json({status: "on-premises agent not connected"});
             } else {    // an agent client is now connected
-                ((req as any) as {agentConnection: Connection}).agentConnection = connectionManager.connectionLists[0];
+                ((req as any) as {agentConnection: Connection}).agentConnection = connectionManager.connections[0];
                 next();
             }
         }, 3000); // 3 seconds
