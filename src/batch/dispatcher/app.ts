@@ -61,7 +61,11 @@ dispatcher.on("dispatching", (sessionId) => {
     console.log(`Dispatcher <<enabled>>`);
 }).on("disabled", () => {
     console.log(`Dispatcher <<disabled>>`);
-});
+}).on("started", () => {
+    console.log(`Dispatcher <<started>>`);
+}).on("stopped", () => {
+    console.log(`Dispatcher <<stopped>>`);
+}).start();
 
 const nodesTracker = dispatcher.nodesTracker;
 nodesTracker.on("node-added", (node) => {
@@ -272,8 +276,11 @@ for (const sig of ['SIGTERM', 'SIGINT'] as const) {
                 resolve();
             });
         });
-        const mostRecentJobsMonitorStoppedPromise = mostRecentJobsMonitor.stop();
-        const promises = Promise.all([serverClosedPromise, mostRecentJobsMonitorStoppedPromise]);
+        const promises = Promise.all([
+            serverClosedPromise,
+            dispatcher.stop(),
+            mostRecentJobsMonitor.stop()
+        ]);
         promises.then(() => {
             console.log(`Shutdown complete.`);
             process.exit(0);

@@ -5,6 +5,7 @@ import { Node, NodesTracker } from './nodes.js'
 import { DispatchSession, DispatchResultRow } from './dispatch-session.js';
 import { JobId, NodeIdentifyInfo, NodeInfoRow, NodeId, TaskItem } from '../types.js';
 import { NodesJobKiller, JobKillStatRow } from './nodes-job-killer.js';
+import {Pooling} from "../../pooling.js";
 
 export interface DispatcherEvents {
     "enabled": () => void;
@@ -13,6 +14,8 @@ export interface DispatcherEvents {
     "dispatch-completed": (dispatchSession: DispatchSession) => void;
     "node-to-be-dispatched-one-task": (nodeId: NodeId, taskItem: TaskItem) => void;
     "one-task-dispatched": (resultRow: DispatchResultRow) => void;
+    "started": () => void;
+    "stopped": () => void;
 }
 
 export interface DispatcherJSON {
@@ -29,6 +32,7 @@ export class Dispatcher extends EventEmitter {
     public nodesTracker: NodesTracker = new NodesTracker();
     private _currentDispatchSession: DispatchSession | null = null;
     public nodesJobKiller: NodesJobKiller;
+    private _nodesSystemLoadPooling: Pooling<void>;
     constructor(private _connectionManager: ConnectionManager, jobKillRetries: number = 2, jobKillTryIntervalMS: number = 2000) {
         super();
         this.nodesJobKiller = new NodesJobKiller(this.nodesTracker, jobKillRetries, jobKillTryIntervalMS);
@@ -55,6 +59,10 @@ export class Dispatcher extends EventEmitter {
         }).on("dispatch-completed", () => {
             this.dispatchTasksIfNecessary();
         });
+        const nodesSystemLoadPooling = new Pooling<void>(async () => {
+            await this.nodesTracker.updateNodesSystemLoading();
+        }, 30000);  // update system loading every 30 seconds
+        this._nodesSystemLoadPooling = nodesSystemLoadPooling;
     }
     get enabled(): boolean {
         return this._enabled;
@@ -134,6 +142,14 @@ export class Dispatcher extends EventEmitter {
     }
     get killingJobId(): JobId | null {
         return this.nodesJobKiller.killingJobId;
+    }
+    start() {
+        this._nodesSystemLoadPooling.start();
+        this.safeEmit("started");
+    }
+    async stop() {
+        await this._nodesSystemLoadPooling.stop();
+        this.safeEmit("stopped");
     }
     toJSON(): DispatcherJSON {
         return {
