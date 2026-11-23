@@ -7,6 +7,8 @@ export interface MostRecentJobsMonitorEvents {
     "pooled": (result: Job[]) => void;
     "pooling-error": (error: any) => void;
     "change": () => void;
+    "started": () => void;
+    "stopped": () => void;
 }
 
 export interface IMostRecentJobsMonitor {
@@ -46,6 +48,10 @@ export class MostRecentJobsMonitor extends EventEmitter implements IMostRecentJo
             } else {
                 this.safeEmit("pooling-error", error);
             }
+        }).on("started", () => {
+            this.safeEmit("started");
+        }).on("stopped", () => {
+            this.safeEmit("stopped");
         });
         this.pooling_ = pooling;
     }

@@ -82,6 +82,7 @@ export interface TaskLauncherAppEvents {
     "task-launch-error": (j: JobId, t: TaskIndex, errorType: TaskLauncherAckError, cause?: string | null) => void;
     "notify-dispatcher-error": (error: string) => void;
     "started": (listenAddr: string) => void;
+    "stopping": () => void;
     "stopped": () => void;
     "client-state-change": (newState: ClientState) => void;
     "client-ready": () => void;
@@ -99,6 +100,7 @@ export interface TaskLauncherAppEvents {
 export class TaskLauncherApp extends EventEmitter implements INodeIdentitySource {
     private _app: express.Express = express();
     private _server: http.Server | null = null;
+    private _stopping: boolean = false;
     public sessionId: NodeSessionId = generateGuid();
     public hostname: NodeName = os.hostname();
     public listenHost: string;
@@ -241,6 +243,12 @@ export class TaskLauncherApp extends EventEmitter implements INodeIdentitySource
         } catch (error) {
             console.error(`TaskLauncherApp "${event}" listener threw:`, error);
         }
+    }
+    get started(): boolean {
+        return (this._server != null);
+    }
+    get stopping(): boolean {
+        return this._stopping;
     }
     getMainDiskDrivePath(mainDiskDrivePath?: string | null): string | null {
         mainDiskDrivePath = mainDiskDrivePath || "";
@@ -632,24 +640,28 @@ export class TaskLauncherApp extends EventEmitter implements INodeIdentitySource
         // start the app server
         if (this._server == null) {
             this._server = this._app.listen(this.listenPort, this.listenHost, () => {
-                // connect to the SSE dispatcher server
-                this._sseClient.connect();
-                this._systemLoadMonitoring.start();
+                this._sseClient.connect();  // connect to the SSE dispatcher server
+                this._systemLoadMonitoring.start(); // start monitoring system load
                 this.safeEmit("started", `http://${this.listenHost}:${this.listenPort}`);
             });
         }
     }
     // stop the app server and related components
     async stop() {
-        if (this._server != null) {
-            await this._systemLoadMonitoring.stop();
-            this._sseClient.close();
+        if (this._server != null && !this.stopping) {
+            const server = this._server; // store reference to the server before stopping it
+            this._stopping = true;
+            this.safeEmit("stopping");
+            await this._systemLoadMonitoring.stop(); // stop monitoring system load 
+            this._sseClient.close();    // close the SSE client connection
             const serverStopPromise = new Promise<void>((resolve) => {
-                this._server!.close(() => {
+                server.closeAllConnections();
+                server.close(() => {
                     resolve();
                 });
             });
-            await serverStopPromise;
+            await serverStopPromise;    // wait for the server to stop
+            this._stopping = false; // reset stopping flag after server has stopped
             this._server = null;
             this.safeEmit("stopped");
         }

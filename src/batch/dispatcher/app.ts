@@ -114,6 +114,10 @@ const mostRecentJobsMonitor = new MostRecentJobsMonitor(poolDataPlaneDBPool, 300
 mostRecentJobsMonitor
 .on("change", () => {
     recentJobsMonitorConnectionManager.broadcastNotification("change", mostRecentJobsMonitor.toJSON());
+}).on("started", () => {
+    console.log("MostRecentJobsMonitor <<started>>");
+}).on("stopped", () => {
+    console.log("MostRecentJobsMonitor <<stopped>>");
 }).start();
 
 class LocalDispatcherAbstraction implements IDispatcherAbstraction {
@@ -262,7 +266,11 @@ for (const sig of ['SIGTERM', 'SIGINT'] as const) {
     process.once(sig, () => {
         console.log(`${sig} received, shutting down...`);
         const serverClosedPromise = new Promise<void>((resolve) => {
-            server.close(() => resolve());
+            server.closeAllConnections();
+            server.close(() => {
+                console.log(`app server <<closed>>`);
+                resolve();
+            });
         });
         const mostRecentJobsMonitorStoppedPromise = mostRecentJobsMonitor.stop();
         const promises = Promise.all([serverClosedPromise, mostRecentJobsMonitorStoppedPromise]);

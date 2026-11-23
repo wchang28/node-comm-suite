@@ -17,6 +17,8 @@ const app = new TaskLauncherApp("http://127.0.0.1:8080/task-launcher/events", db
 app.on("started", (listenAddr) => {
     console.log(`app is listening on ${listenAddr}`);
     console.log(`app health url: ${listenAddr}/health`);
+}).on("stopping", () => {
+    console.log(`stopping the app...`);
 }).on("stopped", () => {
     console.log(`app has stopped`);
 }).on("client-state-change", (newState) => {
