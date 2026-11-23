@@ -18,7 +18,6 @@ export interface DispatchMonitorEvents {
 export interface DirtyFlags {
     queueDirty: boolean;
     nodesDirty: boolean;
-    jobKillerDirty: boolean;
     dispatcherDirty: boolean;
 }
 
@@ -26,13 +25,11 @@ export class DispatchMonitor extends EventEmitter {
     private pooling_: Pooling<void>;
     private queueDirty: boolean = false;
     private nodesDirty: boolean = false;
-    private jobKillerDirty: boolean = false;
     private dispatcherDirty: boolean = false;
     get dirtyFlags(): DirtyFlags {
         return {
             queueDirty: this.queueDirty,
             nodesDirty: this.nodesDirty,
-            jobKillerDirty: this.jobKillerDirty,
             dispatcherDirty: this.dispatcherDirty
         };
     }
@@ -49,9 +46,7 @@ export class DispatchMonitor extends EventEmitter {
             }
         });
         dispatcher.nodesJobKiller.on("change", () => {
-            if (!this.jobKillerDirty) {
-                this.jobKillerDirty = true;
-            }
+            this.safeEmit("job-killer-change", dispatcher.nodesJobKiller.toJSON());
         });
         dispatcher.on("change", () => {
             if (!this.dispatcherDirty) {
@@ -66,10 +61,6 @@ export class DispatchMonitor extends EventEmitter {
             if (this.nodesDirty) {
                 this.nodesDirty = false;
                 this.safeEmit("nodes-change", dispatcher.nodesTracker.toJSON());
-            }
-            if (this.jobKillerDirty) {
-                this.jobKillerDirty = false;
-                this.safeEmit("job-killer-change", dispatcher.nodesJobKiller.toJSON());
             }
             if (this.dispatcherDirty) {
                 this.dispatcherDirty = false;
