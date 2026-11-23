@@ -335,6 +335,7 @@ export class TaskLauncherApp extends EventEmitter implements INodeIdentitySource
         }
         return {
             hostname: this.hostname,
+            sessionId: this.sessionId,
             client: clientInfo,
             taskUtilization,
             cpu,

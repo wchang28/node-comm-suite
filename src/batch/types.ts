@@ -57,6 +57,7 @@ export interface NetworkInterface {
 
 export interface NodeHealthInfo {
     hostname: string;
+    sessionId: NodeSessionId;
     client: TaskLauncherClientInfo;
     taskUtilization: TaskUtilizationInfo;
     cpu: CPUUsageInfo;
