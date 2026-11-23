@@ -1,7 +1,7 @@
 import { EventEmitter } from 'node:events';
 import assert from 'assert';
 import { getRandomInt } from '../../utils.js';
-import {JobId, TaskIndex, TaskItems} from "../types.js";
+import {JobId, TaskIndex, TaskItems, QueueJSON} from "../types.js";
 
 export interface QueueEvents {
     "tasks-queued": () => void;
@@ -11,13 +11,6 @@ export interface QueueEvents {
     "opened": () => void;
     "closed": () => void;
     "change": () => void;
-}
-
-export interface QueueJSON {
-    closed: boolean;
-    numJobs: number;
-    numTasks: number;
-    jobs: { jobId: JobId; numTasks: number }[];
 }
 
 type TaskList = TaskIndex[];

@@ -179,3 +179,40 @@ export interface Job {
     abortedBy: string | null;
     abortTime: Date | string | null;
 }
+
+export interface QueueJSON {
+    closed: boolean;
+    numJobs: number;
+    numTasks: number;
+    jobs: { jobId: JobId; numTasks: number }[];
+}
+
+export interface NodesTrackerJSON {
+    numNodes: number;
+    numAvailableTaskSlots: number;
+    numUsedTaskSlots: number;
+    totalTaskSlots: number;
+    numUsableTaskSlots: number;
+    utilizationPercent: number | null;
+    utilization: string;
+    nodes: NodeInfoRow[];
+}
+
+export type JobKillState = "queued" | "killing";
+
+export interface JobKillStatRow {
+    jobId: JobId;
+    state: JobKillState;
+}
+
+export interface DispatcherStates {
+    enabled: boolean;
+    dispatching: boolean;
+}
+
+export interface DispatcherJSON {
+    states: DispatcherStates;
+    queue: QueueJSON;
+    nodes: NodesTrackerJSON;
+    jobsKillStats: JobKillStatRow[];
+}

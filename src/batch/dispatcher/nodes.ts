@@ -12,6 +12,7 @@ import {
     INodeTaskDispatcher,
     NodeHealthInfo,
     NodeInfoRow,
+    NodesTrackerJSON,
     PID,
     TaskFinishedMsgPayload,
     JobId,
@@ -319,6 +320,44 @@ export class NodesTracker extends EventEmitter implements INodeTaskDispatcher {
         }
         return total;
     }
+    // Get the total number of available task slots across all nodes
+    get numAvailableTaskSlots(): number {
+        let total: number = 0;
+        for (const node of this._nodes.values()) {
+            total += node.numAvailableTaskSlots;
+        }
+        return total;
+    }
+    // Get the total number of used task slots across all nodes
+    get numUsedTaskSlots(): number {
+        let total: number = 0;
+        for (const node of this._nodes.values()) {
+            total += node.numUsedTaskSlots;
+        }
+        return total;
+    }
+    get totalTaskSlots(): number {
+        let total: number = 0;
+        for (const node of this._nodes.values()) {
+            total += node.totalTaskSlots;
+        }
+        return total;
+    }
+    get utilizationPercent(): number | null {
+        const total = this.totalTaskSlots;
+        const used = this.numUsedTaskSlots;
+        if (total > 0 && used >= 0) {
+            return (used / total) * 100.0;
+        } else {
+            return null;
+        }
+    }
+    get utilization(): string {
+        const utilizationPercent = this.utilizationPercent;
+        const percent = (utilizationPercent != null ? `${utilizationPercent.toFixed(2)}%` : 'N/A');
+        const s =`${this.numUsedTaskSlots}/${this.totalTaskSlots}=${percent}`;
+        return s;
+    }
     // Returns whether there are any usable task slots available across all nodes
     get hasUsableTaskSlots(): boolean {
         return (this.numUsableTaskSlots > 0);
@@ -378,8 +417,18 @@ export class NodesTracker extends EventEmitter implements INodeTaskDispatcher {
     get nodesSessionIds(): NodeSessionId[] {
         return this._nodeList.map(node => node.sessionId);
     }
-    toJSON(): NodeInfoRow[] {
-        return this._nodeList.map(node => node.toJSON());
+    toJSON(): NodesTrackerJSON {
+        const nodes = this._nodeList.map(node => node.toJSON());
+        return {
+            numNodes: this.numNodes,
+            numAvailableTaskSlots: this.numAvailableTaskSlots,
+            numUsedTaskSlots: this.numUsedTaskSlots,
+            totalTaskSlots: this.totalTaskSlots,
+            numUsableTaskSlots: this.numUsableTaskSlots,
+            utilizationPercent: this.utilizationPercent,
+            utilization: this.utilization,
+            nodes
+        };
     }
     on<K extends keyof NodeTrackerEvents>(
         event: K,

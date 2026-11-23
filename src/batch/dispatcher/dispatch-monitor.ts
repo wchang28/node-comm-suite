@@ -1,13 +1,11 @@
 import {EventEmitter} from 'node:events';
 import {Pooling} from '../../pooling.js';
-import { Dispatcher, DispatcherStates } from './dispatcher.js';
-import { QueueJSON } from './queue.js';
-import { NodeInfoRow } from '../types.js';
-import { JobKillStatRow } from './nodes-job-killer.js';
+import { Dispatcher} from './dispatcher.js';
+import { NodesTrackerJSON, QueueJSON, JobKillStatRow, DispatcherStates } from '../types.js';
 
 export interface DispatchMonitorEvents {
     "queue-change": (data: QueueJSON) => void;
-    "nodes-change": (data: NodeInfoRow[]) => void;
+    "nodes-change": (data: NodesTrackerJSON) => void;
     "job-killer-change": (data: JobKillStatRow[]) => void;
     "dispatcher-change": (data: DispatcherStates) => void;
     "started": () => void;

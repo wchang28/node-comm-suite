@@ -1,10 +1,10 @@
 import { EventEmitter } from 'node:events';
 import { ConnectionManager } from '../../sse-request/connection-manager.js';
-import { Queue, QueueJSON } from './queue.js';
+import { Queue} from './queue.js';
 import { Node, NodesTracker } from './nodes.js'
 import { DispatchSession, DispatchResultRow } from './dispatch-session.js';
-import { JobId, NodeIdentifyInfo, NodeInfoRow, NodeId, TaskItem } from '../types.js';
-import { NodesJobKiller, JobKillStatRow } from './nodes-job-killer.js';
+import { JobId, NodeIdentifyInfo, NodeId, TaskItem,  DispatcherStates, DispatcherJSON } from '../types.js';
+import { NodesJobKiller } from './nodes-job-killer.js';
 import {Pooling} from "../../pooling.js";
 
 export interface DispatcherEvents {
@@ -18,18 +18,6 @@ export interface DispatcherEvents {
     "started": () => void;
     "stopping": () => void;
     "stopped": () => void;
-}
-
-export interface DispatcherStates {
-    enabled: boolean;
-    dispatching: boolean;
-}
-
-export interface DispatcherJSON {
-    states: DispatcherStates;
-    queue: QueueJSON;
-    nodes: NodeInfoRow[];
-    jobsKillStats: JobKillStatRow[];
 }
 
 export class Dispatcher extends EventEmitter {

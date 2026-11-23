@@ -1,15 +1,8 @@
 import {EventEmitter} from "node:events";
-import type {JobId} from "../types.js";
+import type {JobId, JobKillState, JobKillStatRow} from "../types.js";
 import {SequentialProcessor} from "../../sequential-processor.js";
 import {NodesTracker} from "./nodes.js";
 import {sleep} from "../../utils.js";
-
-export type JobKillState = "queued" | "killing";
-
-export interface JobKillStatRow {
-    jobId: JobId;
-    state: JobKillState;
-}
 
 export type NumberOfProcessesKilled = number;
 
