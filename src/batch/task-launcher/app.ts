@@ -14,9 +14,11 @@ const systemLoadPoolingIntervalMS = 1000; // TODO: read from env vars or config 
 const systemLoadingLogger = new RequestBasedSystemLoadingLogger("http://127.0.0.1:80/system-loading-logger");
 
 const app = new TaskLauncherApp("http://127.0.0.1:8080/task-launcher/events", dbPool, systemLoadingLogger, "0.0.0.0", 3000, systemLoadPoolingIntervalMS, 2);
-app.on("listening", (listenAddr) => {
+app.on("started", (listenAddr) => {
     console.log(`app is listening on ${listenAddr}`);
     console.log(`app health url: ${listenAddr}/health`);
+}).on("stopped", () => {
+    console.log(`app has stopped`);
 }).on("client-state-change", (newState) => {
     console.log(`Client state changed: ${newState}`);
 }).on("client-ready", () => {
@@ -49,3 +51,14 @@ app.on("listening", (listenAddr) => {
     console.error(`<<system-load-monitor-error>> System load monitor error: ${error.message}`);
 });
 app.start();    // Start the app (and the underlying HTTP server)
+
+for (const sig of ['SIGTERM', 'SIGINT'] as const) {
+    process.once(sig, () => {
+        console.log(`${sig} received, shutting down...`);
+        app.stop().then(() => {
+            console.log(`Shutdown complete.`);
+            process.exit(0);
+        });
+        setTimeout(() => process.exit(1), 10_000).unref();
+    });
+}

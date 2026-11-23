@@ -35,16 +35,17 @@ import {
     KillJobProcessesResult,
 } from "../types.js";
 import {error_message, generateGuid} from "../../utils.js";
-import { EventEmitter } from 'events';
-import os from 'os';
-import fs from 'fs';
+import { EventEmitter } from 'node:events';
+import os from 'node:os';
+import fs from 'node:fs';
 import express from 'express';
 import morgan from 'morgan';
 import helmet from 'helmet';
 import { OSUtils } from 'node-os-utils';
 import { IJobTaskExecDBPool } from "./db-pools.js";
 import { Pooling } from "../../pooling.js";
-import { assert } from "console";
+import { assert } from "node:console";
+import http from 'node:http';
 
 interface NodeIdentity {
     id: NodeId;
@@ -71,31 +72,33 @@ class JobTaskExecDBWrapper implements IJobTaskExecDB {
 }
 
 export interface TaskLauncherAppEvents {
-    "task-dispatch-received": [j: JobId, t: TaskIndex];
-    "task-launched": [j: JobId, t: TaskIndex, pid: PID];
-    "task-finished": [j: JobId, t: TaskIndex, pid: PID, durationMS: number, code: number, stdout: string, stderr: string];
-    "job-processes-kill-received": [jobId: JobId];
-    "job-processes-killed": [jobId: JobId, numProcesses: number];
-    "change": [];
-    "db-op-error": [op: TaskExecDBOpType, error: string, j: JobId, t: TaskIndex];
-    "task-launch-error": [j: JobId, t: TaskIndex, errorType: TaskLauncherAckError, cause?: string | null];
-    "notify-dispatcher-error": [error: string];
-    "listening": [listenAddr: string];
-    "client-state-change": [newState: ClientState];
-    "client-ready": [];
-    "connection-id-change": [oldConnId: ConnectionId, newConnId: ConnectionId];
-    "message": [data: any, event?: string, id?: string];
-    "connection-id": [connId: ConnectionId];
-    "ping": [timestamp: number];
-    "request": [connId: ConnectionId, reqId: RequestId, content: RequestContent];
-    "request-ack-error": [connId: ConnectionId, reqId: RequestId, error: string];
-    "request-acked": [connId: ConnectionId, reqId: RequestId, response: RequestResponse, reply: any];
-    "system-load-pooled": [info: SystemLoadingInfo];
-    "system-load-monitor-error": [error: Error];
+    "task-dispatch-received": (j: JobId, t: TaskIndex) => void;
+    "task-launched": (j: JobId, t: TaskIndex, pid: PID) => void;
+    "task-finished": (j: JobId, t: TaskIndex, pid: PID, durationMS: number, code: number, stdout: string, stderr: string) => void;
+    "job-processes-kill-received": (jobId: JobId) => void;
+    "job-processes-killed": (jobId: JobId, numProcesses: number) => void;
+    "change": () => void;
+    "db-op-error": (op: TaskExecDBOpType, error: string, j: JobId, t: TaskIndex) => void;
+    "task-launch-error": (j: JobId, t: TaskIndex, errorType: TaskLauncherAckError, cause?: string | null) => void;
+    "notify-dispatcher-error": (error: string) => void;
+    "started": (listenAddr: string) => void;
+    "stopped": () => void;
+    "client-state-change": (newState: ClientState) => void;
+    "client-ready": () => void;
+    "connection-id-change": (oldConnId: ConnectionId, newConnId: ConnectionId) => void;
+    "message": (data: any, event?: string, id?: string) => void;
+    "connection-id": (connId: ConnectionId) => void;
+    "ping": (timestamp: number) => void;
+    "request": (connId: ConnectionId, reqId: RequestId, content: RequestContent) => void;
+    "request-ack-error": (connId: ConnectionId, reqId: RequestId, error: string) => void;
+    "request-acked": (connId: ConnectionId, reqId: RequestId, response: RequestResponse, reply: any) => void;
+    "system-load-pooled": (info: SystemLoadingInfo) => void;
+    "system-load-monitor-error": (error: Error) => void;
 }
 
 export class TaskLauncherApp extends EventEmitter implements INodeIdentitySource {
-    public _app: express.Express = express();
+    private _app: express.Express = express();
+    private _server: http.Server | null = null;
     public sessionId: NodeSessionId = generateGuid();
     public hostname: NodeName = os.hostname();
     public listenHost: string;
@@ -129,39 +132,38 @@ export class TaskLauncherApp extends EventEmitter implements INodeIdentitySource
         this.totalTaskSlots = this.calculateTotalTaskSlots(reservedCPUs, totalTaskSlots);
         this._localBaseUrl = `http://127.0.0.1:${this.listenPort}`;
         this.mainDiskDrivePath = this.getMainDiskDrivePath(mainDiskDrivePath);
-        const me = this;
         // SSE request client initialization
         /////////////////////////////////////////////////////////////////////////////////
         const sseClient = new Client(sseUrl, async (request: RequestContent) => {
             const {path, method, body} = request;
             if (path === "/identify" && method === "GET") {
-                return await me.handleNodeIdentify();
+                return await this.handleNodeIdentify();
             } else if (path === "/task" && method === "PUT") {
-                return await me.handleLaunchNewTask(body as TaskItem);
+                return await this.handleLaunchNewTask(body as TaskItem);
             } else {
-                return await me.forwardRequestViaLocalFetching(request);
+                return await this.forwardRequestViaLocalFetching(request);
             }
         });
         sseClient.on("state-change", (newState) => {
-            me.emit("client-state-change", newState);
+            this.safeEmit("client-state-change", newState);
         }).on("ready", () => {
-            me.emit("client-ready");
+            this.safeEmit("client-ready");
         }).on("connection-id-change", (oldConnId, newConnId) => {
-            me.emit("connection-id-change", oldConnId, newConnId);
+            this.safeEmit("connection-id-change", oldConnId, newConnId);
         }).on("change", () => {
-            me.emit("change");
+            this.safeEmit("change");
         }).on("message", (data, event, id) => {
-            me.emit("message", data, event, id);
+            this.safeEmit("message", data, event, id);
         }).on("connection-id", (connId) => {
-            me.emit("connection-id", connId);
+            this.safeEmit("connection-id", connId);
         }).on("ping", (timestamp) => {
-            me.emit("ping", timestamp);
+            this.safeEmit("ping", timestamp);
         }).on("request", (connId, reqId, content) => {
-            me.emit("request", connId, reqId, content);
+            this.safeEmit("request", connId, reqId, content);
         }).on("request-ack-error", (connId, reqId, error) => {
-            me.emit("request-ack-error", connId, reqId, error);
+            this.safeEmit("request-ack-error", connId, reqId, error);
         }).on("request-acked", (connId, reqId, response, reply) => {
-            me.emit("request-acked", connId, reqId, response, reply);
+            this.safeEmit("request-acked", connId, reqId, response, reply);
         });
         this._sseClient = sseClient;
         /////////////////////////////////////////////////////////////////////////////////
@@ -170,16 +172,16 @@ export class TaskLauncherApp extends EventEmitter implements INodeIdentitySource
         /////////////////////////////////////////////////////////////////////////////////
         const tasksTracker = new TasksTracker(new JobTaskExecDBWrapper(dbPool,  this.sessionId, this));
         tasksTracker.on("task-launched", (j, t, pid) => {
-            me.emit("task-launched", j, t, pid);
+            this.safeEmit("task-launched", j, t, pid);
         }).on("task-finished", async (j, t, pid, durationMS, code, stdout, stderr) => {
-            await me.notifyDispatcherTaskFinished(j, t, pid, code);    // notify the dispatcher that the task has finished
-            me.emit("task-finished", j, t, pid, durationMS, code, stdout, stderr);
+            await this.notifyDispatcherTaskFinished(j, t, pid, code);    // notify the dispatcher that the task has finished
+            this.safeEmit("task-finished", j, t, pid, durationMS, code, stdout, stderr);
         }).on("task-launch-error", (j, t, errorType, cause) => {
-            me.emit("task-launch-error", j, t, errorType, cause);
+            this.safeEmit("task-launch-error", j, t, errorType, cause);
         }).on("db-op-error", (op, error, j, t) => {
-            me.emit("db-op-error", op, error, j, t);
+            this.safeEmit("db-op-error", op, error, j, t);
         }).on("change", () => {
-            me.emit("change");
+            this.safeEmit("change");
         });
         this._tasksTracker = tasksTracker;
         /////////////////////////////////////////////////////////////////////////////////
@@ -187,19 +189,19 @@ export class TaskLauncherApp extends EventEmitter implements INodeIdentitySource
         // system load monitoring initialization
         /////////////////////////////////////////////////////////////////////////////////
         const systemLoadMonitoring = new Pooling<SystemLoadingInfo>(async () => {
-            const currentLoading = await me.getSystemLoading();
-            const sessionId = me.sessionId;
-            const hostname = me.hostname;
+            const currentLoading = await this.getSystemLoading();
+            const sessionId = this.sessionId;
+            const hostname = this.hostname;
             await systemLoadingLogger.log(sessionId, hostname, currentLoading);
             return currentLoading;
         }, this.systemLoadPoolingIntervalMS);
         systemLoadMonitoring.on("callback-returned", (result, error) => {
             if (error) {
                 const message = error_message(error);
-                me.emit("system-load-monitor-error", new Error(message));
+                this.safeEmit("system-load-monitor-error", new Error(message));
             } else {
                 const info = result! as SystemLoadingInfo;
-                me.emit("system-load-pooled", info);
+                this.safeEmit("system-load-pooled", info);
             }
         });
         this._systemLoadMonitoring = systemLoadMonitoring;
@@ -208,15 +210,37 @@ export class TaskLauncherApp extends EventEmitter implements INodeIdentitySource
     }
     on<K extends keyof TaskLauncherAppEvents>(
         event: K,
-        listener: (...args: TaskLauncherAppEvents[K]) => void
+        listener: TaskLauncherAppEvents[K]
     ): this {
         return super.on(event, listener);
     }
+    off<K extends keyof TaskLauncherAppEvents>(
+        event: K,
+        listener: TaskLauncherAppEvents[K]
+    ): this {
+        return super.off(event, listener);
+    }
     emit<K extends keyof TaskLauncherAppEvents>(
         event: K,
-        ...args: TaskLauncherAppEvents[K]
+        ...args: Parameters<TaskLauncherAppEvents[K]>
     ): boolean {
         return super.emit(event, ...args);
+    }
+    once<K extends keyof TaskLauncherAppEvents>(
+        event: K,
+        listener: TaskLauncherAppEvents[K]
+    ): this {
+        return super.once(event, listener);
+    }
+    safeEmit<K extends keyof TaskLauncherAppEvents>(
+        event: K,
+        ...args: Parameters<TaskLauncherAppEvents[K]>
+    ): void {
+        try {
+            this.emit(event, ...args);
+        } catch (error) {
+            console.error(`TaskLauncherApp "${event}" listener threw:`, error);
+        }
     }
     getMainDiskDrivePath(mainDiskDrivePath?: string | null): string | null {
         mainDiskDrivePath = mainDiskDrivePath || "";
@@ -242,11 +266,11 @@ export class TaskLauncherApp extends EventEmitter implements INodeIdentitySource
     }
     get taskUtilization(): TaskUtilizationInfo {
         const totalTaskSlots = this.totalTaskSlots;
-        const numRunningTasks = this._tasksTracker.numRunningTasks;
-        const utilizationPercent = numRunningTasks / totalTaskSlots * 100.0;
+        const usedTaskSlots = this._tasksTracker.numRunningTasks;
+        const utilizationPercent = usedTaskSlots / totalTaskSlots * 100.0;
         return {
             totalTaskSlots,
-            numRunningTasks,
+            usedTaskSlots,
             utilizationPercent
         };
     }
@@ -377,7 +401,7 @@ export class TaskLauncherApp extends EventEmitter implements INodeIdentitySource
         router.get("/", (_, res) => {
             res.status(200).json(me._tasksTracker.toJSON());
         });
-        // get task utilization inf
+        // get task utilization info
         router.get("/utilization", (_, res) => {
             res.status(200).json(me.taskUtilization);
         });
@@ -454,7 +478,6 @@ export class TaskLauncherApp extends EventEmitter implements INodeIdentitySource
         return router;
     }
     private initExpressApp() {
-        const me = this;
         const app = this._app;
         app.disable('x-powered-by');
         app.set('trust proxy', true);
@@ -462,15 +485,15 @@ export class TaskLauncherApp extends EventEmitter implements INodeIdentitySource
         app.use(morgan('combined'));
         // for health check
         app.get("/health", async (_, res) => {
-            res.status(200).json(await me.getHealthInfo());
+            res.status(200).json(await this.getHealthInfo());
         });
         // for system loading info
         app.get("/system-loading", async (_, res) => {
-            res.status(200).json(await me.getSystemLoading());
+            res.status(200).json(await this.getSystemLoading());
         });
         // for node identify info
         app.get("/identify", async (_, res) => {
-            res.status(200).json(await me.getNodeIdentifyInfo());
+            res.status(200).json(await this.getNodeIdentifyInfo());
         });
         const taskRouter = this.createTaskRouter();
         app.use("/task", taskRouter);
@@ -535,7 +558,7 @@ export class TaskLauncherApp extends EventEmitter implements INodeIdentitySource
             await this._sseClient.sendMessage(event, data);
         } catch(err) {
             const message = error_message(err);
-            this.emit("notify-dispatcher-error", message);
+            this.safeEmit("notify-dispatcher-error", message);
         }
     }
     // notify the dispatcher that a task is finished. DO NOT throw exception
@@ -545,7 +568,7 @@ export class TaskLauncherApp extends EventEmitter implements INodeIdentitySource
     }
     // handle the request to launch a new task. DO NOT throw exception
     private async handleLaunchNewTask(taskItem: TaskItem) {
-        this.emit("task-dispatch-received", taskItem.j, taskItem.t);
+        this.safeEmit("task-dispatch-received", taskItem.j, taskItem.t);
         try {
             const pid = await this._tasksTracker.lanuchTask(taskItem);
             const payload: TaskLaunchSuccessPayload = {
@@ -598,20 +621,36 @@ export class TaskLauncherApp extends EventEmitter implements INodeIdentitySource
         };
     }
     async killJobProcesses(jobId: JobId): Promise<number> {
-        this.emit("job-processes-kill-received", jobId);
+        this.safeEmit("job-processes-kill-received", jobId);
         const numProcessesKilled = await this._tasksTracker.killJobProcesses(jobId);
-        this.emit("job-processes-killed", jobId, numProcessesKilled);
+        this.safeEmit("job-processes-killed", jobId, numProcessesKilled);
         return numProcessesKilled;
     }
     // start the app
     start() {
-        const me = this;
         // start the app server
-        this._app.listen(this.listenPort, this.listenHost, () => {
-            // connect to the SSE dispatcher server
-            me._sseClient.connect();
-            me._systemLoadMonitoring.start();
-            me.emit("listening", `http://${this.listenHost}:${this.listenPort}`);
-        });
+        if (this._server == null) {
+            this._server = this._app.listen(this.listenPort, this.listenHost, () => {
+                // connect to the SSE dispatcher server
+                this._sseClient.connect();
+                this._systemLoadMonitoring.start();
+                this.safeEmit("started", `http://${this.listenHost}:${this.listenPort}`);
+            });
+        }
+    }
+    // stop the app server and related components
+    async stop() {
+        if (this._server != null) {
+            await this._systemLoadMonitoring.stop();
+            this._sseClient.close();
+            const serverStopPromise = new Promise<void>((resolve) => {
+                this._server!.close(() => {
+                    resolve();
+                });
+            });
+            await serverStopPromise;
+            this._server = null;
+            this.safeEmit("stopped");
+        }
     }
 }

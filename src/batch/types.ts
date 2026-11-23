@@ -18,7 +18,7 @@ export type TaskLauncherClientInfo = {
 
 export interface TaskUtilizationInfo {
     totalTaskSlots: number;
-    numRunningTasks: number;
+    usedTaskSlots: number;
     utilizationPercent: number;
 }
 
