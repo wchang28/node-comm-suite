@@ -90,9 +90,15 @@ export class NodesJobKiller extends EventEmitter {
         return this.processor_.processingInput;
     }
     toJSON(): JobKillStatRow[] {
-        return this.processor_.toJSON().map(({state:js, input: jobId}) => {
+        return this.processor_.toJSON().jobs.map(({state:js, input: jobId}) => {
             const state: JobKillState = (js == "queued" ? "queued" : "killing");
             return {state, jobId};
         });
+    }
+    start() {
+        this.processor_.start();
+    }
+    async stop() {
+        await this.processor_.stop();
     }
 }

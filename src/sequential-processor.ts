@@ -11,6 +11,7 @@ interface Job<I, O> {
 interface QueueEvents<I, O> {
     "enqueue": (job: Job<I, O>) => void;
     "dequeue": (job: Job<I, O>) => void;
+    "change": () => void;
 }
 
 class Queue<I, O> extends EventEmitter {
@@ -42,11 +43,13 @@ class Queue<I, O> extends EventEmitter {
     enqueue(job: Job<I, O>): void {
         this.jobs_.push(job);
         this.safeEmit("enqueue", job);
+        this.safeEmit("change");
     }
     dequeue(): Job<I, O> | undefined {
         const job = this.jobs_.shift();
         if (job) {
             this.safeEmit("dequeue", job);
+            this.safeEmit("change");
         }
         return job;
     }
@@ -56,28 +59,55 @@ class Queue<I, O> extends EventEmitter {
     get jobs(): readonly Job<I, O>[] {
         return this.jobs_;
     }
+    // Clears the queue and rejects all pending jobs with an "Job aborted" error.
+    clear(): void {
+        for (const job of this.jobs_) {
+            job.reject(new Error("Job aborted"));
+        }
+        this.jobs_ = [];
+        this.safeEmit("change");
+    }
 }
 
 export interface SequentialProcessorEvents<I, O> {
     "change": () => void;
     "processing": (input: I) => void;
-    "processed": (input: I, output: O) => void;
-    "process-error": (input: I, error: unknown) => void;
+    "processed": (input: I, output: O) => void; // successfully processed a job
+    "process-error": (input: I, error: unknown) => void;    // failed to process a job
+    "idle": () => void; // processor became idle
+    "started": () => void; // processor started
+    "stopped": () => void; // processor stopped
+    "stopping": () => void; // processor stopping
+    "state-change": (oldState: State, newState: State) => void; // processor state changed
 }
 
 export type JobState = "queued" | "processing";
-export interface JobSummaryRow<T> {
+
+export interface JobSummaryRow<I> {
     state: JobState;
-    input: T;
+    input: I;
+}
+
+export type State = "started" | "stopping" | "stopped";
+
+export interface SequentialProcessorJSON<I> {
+    state: State;
+    processing: boolean;
+    pending: number;
+    jobs: JobSummaryRow<I>[];
 }
 
 export class SequentialProcessor<I, O> extends EventEmitter {
+    private state_: State = "stopped";
     private queue_: Queue<I, O> = new Queue<I, O>();
     private processingJob_: Job<I, O> | null = null;
     constructor(private readonly processor_: Processor<I, O>) {
         super();
         this.queue_.on("enqueue", () => {
             this.safeEmit("change");
+            this.drain();
+        });
+        this.on("idle", () => {
             this.drain();
         });
     }
@@ -110,9 +140,31 @@ export class SequentialProcessor<I, O> extends EventEmitter {
             console.error(`SequentialProcessor "${event}" listener threw:`, err);
         }
     }
+    get state(): State {
+        return this.state_;
+    }
+    private set state(newState: State) {
+        const oldState: State = this.state_;
+        if (oldState !== newState) {
+            this.state_ = newState;
+            if (newState === "started") {
+                this.safeEmit("started");
+            } else if (newState === "stopped") {
+                this.safeEmit("stopped");
+            } else if (newState === "stopping") {
+                this.safeEmit("stopping");
+            }
+            this.safeEmit("state-change", oldState, newState);
+            this.safeEmit("change");
+        }
+    }
     // returns true if currently processing a job, false if idle
     get processing(): boolean {
         return (this.processingJob_ != null);
+    }
+    // Returns true if the processor is idle (not currently processing a job).
+    get idle(): boolean {
+        return (this.processingJob_ == null);
     }
     // The input currently being processed, or null if idle.
     get processingInput(): I | null {
@@ -127,15 +179,11 @@ export class SequentialProcessor<I, O> extends EventEmitter {
             const goingFromProcessingToIdle = (oldJob != null && newJob == null);   // Processing -> Idle
             const goingFromIdleToProcessing = (oldJob == null && newJob != null);   // Idle -> Processing
             if (goingFromProcessingToIdle) {    // Processing -> Idle
-                this.drain();
+                this.safeEmit("idle"); // emit idle event when transitioning from processing to idle
             } else if (goingFromIdleToProcessing) { // Idle -> Processing
                 this.safeEmit("processing", newJob!.input);
             }
         }
-    }
-    // Returns true if the processor is idle (not currently processing a job).
-    get idle(): boolean {
-        return (this.processingJob_ == null);
     }
     // Returns the number of jobs currently pending in the queue.
     get pending(): number {
@@ -143,9 +191,13 @@ export class SequentialProcessor<I, O> extends EventEmitter {
     }
     // Submit a job to the queue and return a promise that resolves with the output or rejects with an error.
     submit(input: I): Promise<O> {
-        return new Promise<O>((resolve, reject) => {
-            this.queue_.enqueue({ input, resolve, reject });
-        });
+        if (this.state == "started") {
+            return new Promise<O>((resolve, reject) => {
+                this.queue_.enqueue({ input, resolve, reject });
+            });
+        } else {
+            return Promise.reject(new Error("Processor is not started"));
+        }
     }
     // Starts processing the next job in the queue (if there is one) if the processor is idle.
     private drain() {
@@ -153,32 +205,60 @@ export class SequentialProcessor<I, O> extends EventEmitter {
             const job = this.queue_.dequeue();
             if (job) {  // if there is a job got dequeued, start processing it
                 this.processingJob = job; // Idle -> Processing
-                //this.processor_(job.input)
                 new Promise<O>((resolve) => resolve(this.processor_(job.input)))
                 .then((output) => {
                     this.safeEmit("processed", job.input, output);
+                    this.processingJob = null; // Processing -> Idle
                     job.resolve(output);
                 })
                 .catch((err) => {
                     this.safeEmit("process-error", job.input, err);
+                    this.processingJob = null; // Processing -> Idle
                     job.reject(err);
                 })
-                .finally(() => {
-                    this.processingJob = null; // Processing -> Idle
-                });
             }
         }
+    }
+    // await for the processor to become idle
+    async forIdle() {
+        let idlePromise: Promise<void> = Promise.resolve();
+        if (!this.idle) {    // currenly processing job
+            idlePromise = new Promise<void>((resolve) => {
+                this.once("idle", () => {
+                    resolve();
+                });
+            });
+        }
+        await idlePromise;
     }
     // Returns an array of inputs currently queued for processing.
     get queuedInputs(): I[] {
         return this.queue_.jobs.map(job => job.input);
     }
     // Returns a summary of all jobs, including the currently processing job and queued jobs.
-    toJSON(): JobSummaryRow<I>[] {
+    toJSON(): SequentialProcessorJSON<I>{
         const rows: JobSummaryRow<I>[] = this.queue_.jobs.map(job => ({ input: job.input, state: "queued" }));
         if (this.processingJob_) {  // if there is a job currently being processed, add it to the summary as "processing"
             rows.unshift({ input: this.processingJob_.input, state: "processing" });    // add the currently processing job at the beginning of the summary
         }
-        return rows;
+        return {
+            state: this.state,
+            processing: this.processing,
+            pending: this.pending,
+            jobs: rows
+        };
+    }
+    start() {
+        if (this.state == "stopped") {
+            this.state = "started";
+        }
+    }
+    async stop() {
+        if (this.state === "started") {
+            this.state = "stopping";
+            this.queue_.clear();    // clear the queue
+            await this.forIdle(); // wait for the processor to become idle
+            this.state = "stopped";
+        }
     }
 }

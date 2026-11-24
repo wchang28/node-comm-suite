@@ -16,6 +16,15 @@ if (!Number.isInteger(PORT) || PORT <= 0 || PORT > 65535) {
 
 const sequenceFilePath = path.resolve(process.env.SEQUENCE_JSON_FILE ?? 'counter.json');
 const sequenceGenerator = new FileBasedSequenceNumberGenerator(sequenceFilePath);
+sequenceGenerator
+.on("started", () => {
+    console.log("Sequence number generator <<started>>");
+}).on("stopped", () => {
+    console.log("Sequence numbergenerator <<stopped>>");
+}).on("stopping", () => {
+    console.log("Sequence number generator <<stopping>>");
+})
+.start();
 
 const AUTH_TOKEN = process.env.AUTH_TOKEN ?? '';
 
@@ -88,9 +97,21 @@ app.get('/set', async (req: Request, res: Response) => {
 
 app.get("/status", async (req: Request, res: Response) => {
     const current = await sequenceGenerator.current();
-    const idle = sequenceGenerator.idle;
-    const pending = sequenceGenerator.pending;
-    res.json({ current, idle, pending });
+    const { state, processing, pending, jobs: jobList } = sequenceGenerator.toJSON();
+    const jobs = jobList.map(({state, input}) => {
+        return {
+            state,
+            operation: input.operation,
+            value: input.value ? input.value : null
+        }
+    });
+    res.json({
+        current,
+        state,
+        processing,
+        pending,
+        jobs
+    });
 });
 
 const server = app.listen(PORT, HOSTNAME, (err?: Error) => {
@@ -105,7 +126,22 @@ const server = app.listen(PORT, HOSTNAME, (err?: Error) => {
 for (const sig of ['SIGTERM', 'SIGINT'] as const) {
     process.once(sig, () => {
         console.log(`${sig} received, shutting down`);
-        server.close(() => process.exit(0));
+        const serverClosedPromise = new Promise<void>((resolve) => {
+            console.log(`app server <<closing>>`);
+            server.closeAllConnections();
+            server.close(() => {
+                console.log(`app server <<closed>>`);
+                resolve();
+            });
+        });
+        const promises = Promise.all([
+            serverClosedPromise,
+            sequenceGenerator.stop()
+        ]);
+        promises.then(() => {
+            console.log(`Shutdown complete.`);
+            process.exit(0);
+        })
         setTimeout(() => process.exit(1), 10_000).unref();
     });
 }

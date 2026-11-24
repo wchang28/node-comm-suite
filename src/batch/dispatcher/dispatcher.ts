@@ -149,9 +149,13 @@ export class Dispatcher extends EventEmitter {
     }
     start() {
         this._nodesSystemLoadPooling.start();
+        this.nodesJobKiller.start();
     }
     async stop() {
+        this.queue.clear();
+        await this.forIdle();
         await this._nodesSystemLoadPooling.stop();
+        await this.nodesJobKiller.stop();
     }
     get states(): DispatcherStates {
         return {

@@ -140,6 +140,14 @@ export class Queue extends EventEmitter {
         }
         return ret;
     }
+    clear(): void {
+        this._queue.clear();
+        this._jobsList = [];
+        if (this.isEmpty) {
+            this.safeEmit("queue-empty");
+        }
+        this.safeEmit("change");
+    }
     toJSON(): QueueJSON {
         const jobsArray: { jobId: JobId; numTasks: number }[] = [];
         for (const [jobId, tasks] of this._queue.entries()) {

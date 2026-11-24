@@ -1,4 +1,4 @@
-import {SequentialProcessor} from "./sequential-processor.js";
+import {SequentialProcessor, JobSummaryRow} from "./sequential-processor.js";
 import {readFile, writeFile, rename} from "node:fs/promises";
 
 const MIN_INT = 0;
@@ -10,41 +10,42 @@ interface OperationRequest {
     value?: number;
 }
 
+// Reads the current value from the file.
+async function readCurrentValue(filePath: string) {
+    let content: string;
+    try {
+        content = await readFile(filePath, "utf-8");
+    } catch (e) {
+        if ((e as NodeJS.ErrnoException).code === "ENOENT") return MIN_INT;
+        throw e;
+    }
+    const trimmed = content.trim();
+    if (!/^\d+$/.test(trimmed)) {
+        throw new Error(`Corrupt sequence file ${filePath}: "${content}"`);
+    }
+    const currentValue = Number(trimmed);
+    if (currentValue > MAX_INT) {
+        throw new Error(`Sequence value out of range: ${currentValue}`);
+    }
+    return currentValue;
+}
+
+// Writes the current value to the file.
+async function writeCurrentValue(filePath: string, currentValue: number) {
+    /*
+    const tmp = `${this.filePath}.tmp`;
+    await writeFile(tmp, currentValue.toString(), "utf-8");
+    await rename(tmp, this.filePath);   // atomic replace
+    */
+    await writeFile(filePath, currentValue.toString(), "utf-8");
+}
+
 // A file-based sequence number generator that ensures sequential access to the sequence number.
-export class FileBasedSequenceNumberGenerator {
-    private readonly processor_: SequentialProcessor<OperationRequest, number>;
-    // Reads the current value from the file.
-    private async readCurrentValue() {
-        let content: string;
-        try {
-            content = await readFile(this.filePath, "utf-8");
-        } catch (e) {
-            if ((e as NodeJS.ErrnoException).code === "ENOENT") return MIN_INT;
-            throw e;
-        }
-        const trimmed = content.trim();
-        if (!/^\d+$/.test(trimmed)) {
-            throw new Error(`Corrupt sequence file ${this.filePath}: "${content}"`);
-        }
-        const currentValue = Number(trimmed);
-        if (currentValue > MAX_INT) {
-            throw new Error(`Sequence value out of range: ${currentValue}`);
-        }
-        return currentValue;
-    }
-    // Writes the current value to the file.
-    private async writeCurrentValue(currentValue: number) {
-        /*
-        const tmp = `${this.filePath}.tmp`;
-        await writeFile(tmp, currentValue.toString(), "utf-8");
-        await rename(tmp, this.filePath);   // atomic replace
-        */
-        await writeFile(this.filePath, currentValue.toString(), "utf-8");
-    }
-    constructor(public filePath: string) {
-        this.processor_ = new SequentialProcessor<OperationRequest, number>(async (input: OperationRequest) => {
+export class FileBasedSequenceNumberGenerator extends SequentialProcessor<OperationRequest, number> {
+    constructor(filePath: string) {
+        super(async (input: OperationRequest) => {
             if (input.operation === "reset") {
-                await this.writeCurrentValue(MIN_INT);
+                await writeCurrentValue(filePath, MIN_INT);
                 return MIN_INT;
             }
             else if (input.operation === "set") {
@@ -52,16 +53,16 @@ export class FileBasedSequenceNumberGenerator {
                     throw new Error(`Invalid value for set: ${input.value}`);
                 }
                 const value = Math.max(MIN_INT, Math.min(MAX_INT, input.value!));
-                await this.writeCurrentValue(value);
+                await writeCurrentValue(filePath, value);
                 return value;
             }
             else if (input.operation === "next") {
-                const currentValue = await this.readCurrentValue();
+                const currentValue = await readCurrentValue(filePath);
                 const nextValue = (currentValue >= MAX_INT ? MIN_INT : currentValue + 1);
-                await this.writeCurrentValue(nextValue);
+                await writeCurrentValue(filePath, nextValue);
                 return nextValue;
             } else if (input.operation === "current") {
-                return this.readCurrentValue();
+                return readCurrentValue(filePath);
             } else {
                 throw new Error(`Invalid operation: ${input.operation}`);
             }
@@ -69,26 +70,18 @@ export class FileBasedSequenceNumberGenerator {
     }
     // Returns the current value without modifying it.
     async current() {
-        return this.processor_.submit({ operation: "current" });
+        return this.submit({ operation: "current" });
     }
     // Returns the next value and increments the sequence.
     async next() {
-        return this.processor_.submit({ operation: "next" });
+        return this.submit({ operation: "next" });
     }
     // Resets the sequence to the minimum value.
     async reset() {
-        return this.processor_.submit({ operation: "reset" });
+        return this.submit({ operation: "reset" });
     }
     // Sets the sequence to the specified value.
     async set(value: number) {
-        return this.processor_.submit({ operation: "set", value });
-    }
-    // Returns whether the processor is idle.
-    get idle(): boolean {
-        return this.processor_.idle;
-    }
-    // Returns the number of pending operations in the processor.
-    get pending(): number {
-        return this.processor_.pending;
+        return this.submit({ operation: "set", value });
     }
 }
