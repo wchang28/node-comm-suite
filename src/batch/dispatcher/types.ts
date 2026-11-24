@@ -1,4 +1,4 @@
-import { JobId, DispatcherJSON } from '../types.js';
+import { JobId, DispatcherJSON, NodeId, QueueJSON, NodeInfoRow } from '../types.js';
 
 export interface IDispatcherAbstraction {
     enable(): Promise<boolean>; // enable the dispatcher
@@ -7,6 +7,10 @@ export interface IDispatcherAbstraction {
     closeQueue(): Promise<boolean>; // close the dispatcher's queue
     openQueue(): Promise<boolean>; // open the dispatcher's queue
     isQueueClosed(): Promise<boolean>; // return whether the dispatcher's queue is closed
+    queueJSON(): Promise<QueueJSON>; // return the JSON representation of the dispatcher's queue
+    nodeJSON(nodeId: NodeId): Promise<NodeInfoRow | null>; // return the JSON representation of the specified node
+    enableNode(nodeId: NodeId): Promise<boolean>; // enable the specified node
+    disableNode(nodeId: NodeId): Promise<boolean>; // disable the specified node
     queueJob(jobId: JobId, numTasks: number): Promise<void>; // queue a job with the given number of tasks
     killJob(jobId: JobId): Promise<void>; // kill the specified job
     toJSON(): Promise<DispatcherJSON>; // return the JSON representation of the dispatcher

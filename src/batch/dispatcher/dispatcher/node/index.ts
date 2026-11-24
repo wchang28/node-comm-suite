@@ -12,12 +12,13 @@ router.get("/", async (req: express.Request, res: express.Response) => {
     res.json(dispatcherJSON.nodes);
 });
 
+
+
 router.use('/:nodeId', async (req: express.Request, res: express.Response, next: express.NextFunction) => {
     const nodeId = req.params.nodeId as NodeId;
     const req_gs = new RequestGetSet(req);
     const {dispatcher} = req_gs;
-    const dispatcherJSON = await dispatcher.toJSON();
-    const node = dispatcherJSON.nodes.nodes.find((n: NodeInfoRow) => n.id === nodeId);
+    const node = await dispatcher.nodeJSON(nodeId);
     if (!node) {
         res.status(404).json({message: `Node (${nodeId}) not found`});
     } else {

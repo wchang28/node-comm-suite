@@ -7,20 +7,17 @@ export { router };
 
 router.get("/", async (req: express.Request, res: express.Response) => {
     const {dispatcher} = new RequestGetSet(req);
-    const dispatcherJSON = await dispatcher.toJSON();
-    res.json(dispatcherJSON.queue);
+    res.json(await dispatcher.queueJSON());
 });
 
 router.get("/close", dispatcherControlPermissionMiddleware, async (req: express.Request, res: express.Response) => {
     const {dispatcher} = new RequestGetSet(req);
     await dispatcher.closeQueue();
-    const dispatcherJSON = await dispatcher.toJSON();
-    res.json(dispatcherJSON.queue);
+    res.json(await dispatcher.queueJSON());
 });
 
 router.get("/open", dispatcherControlPermissionMiddleware, async (req: express.Request, res: express.Response) => {
     const {dispatcher} = new RequestGetSet(req);
     await dispatcher.openQueue();
-    const dispatcherJSON = await dispatcher.toJSON();
-    res.json(dispatcherJSON.queue);
+    res.json(await dispatcher.queueJSON());
 });

@@ -266,13 +266,17 @@ export class NodesTracker extends EventEmitter implements INodeTaskDispatcher {
     }
     // get a node by its ID, throw error if not found
     getNode(nodeId: NodeId): Node {
-        const node =this._nodes.get(nodeId)
+        const node = this._nodes.get(nodeId)
         if (!node) {
             const message: ConnectionManagerError = "bad-connection-id";
             const cause = `Node with ID ${nodeId} not found`;
             throw new Error(message, {cause});
         }
         return node;
+    }
+    // get a node by its ID, return undefined if not found
+    node(nodeId: NodeId): Node | undefined {
+        return this._nodes.get(nodeId);
     }
     // remove a node from the tracker by its ID
     removeNode(nodeId: NodeId): void {

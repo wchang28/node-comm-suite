@@ -3,7 +3,7 @@ import morgan from 'morgan';
 import helmet from 'helmet';
 import {ConnectionManager as RequestConnectionManager} from '../../sse-request/connection-manager.js';
 import {Dispatcher} from "./dispatcher.js";
-import { JobId } from "../types.js";
+import { JobId, NodeId } from "../types.js";
 import { DBConfigsFile, toDBConfig } from "../../db-types.js";
 import fs from 'node:fs';
 import { createPoolDataPlaneDBPool } from "./db-pools.js";
@@ -143,27 +143,48 @@ mostRecentJobsMonitor
 class LocalDispatcherAbstraction implements IDispatcherAbstraction {
     constructor(private _dispatcher: Dispatcher) {
     }
-    async enable(): Promise<boolean> {
+    async enable() {
         this._dispatcher.enabled = true;
         return this._dispatcher.enabled;
     }
-    async disable(): Promise<boolean> {
+    async disable() {
         this._dispatcher.enabled = false;
         return this._dispatcher.enabled;
     }
-    async isEnabled(): Promise<boolean> {
+    async isEnabled() {
         return this._dispatcher.enabled;
     }
-    async closeQueue(): Promise<boolean> {
+    async closeQueue() {
         this._dispatcher.queue.closed = true;
         return this._dispatcher.queue.closed;
     }
-    async openQueue(): Promise<boolean> {
+    async openQueue() {
         this._dispatcher.queue.closed = false;
         return this._dispatcher.queue.closed;
     }
-    async isQueueClosed(): Promise<boolean> {
+    async isQueueClosed() {
         return this._dispatcher.queue.closed;
+    }
+    async queueJSON() {
+        return this._dispatcher.queue.toJSON();
+    }
+    async nodeJSON(nodeId: NodeId) {
+        const node = this._dispatcher.nodesTracker.node(nodeId);
+        if (!node) {
+            return null;
+        } else {
+            return node.toJSON();
+        }
+    }
+    async enableNode(nodeId: NodeId) {
+        const node = this._dispatcher.nodesTracker.getNode(nodeId);
+        node.enabled = true;
+        return node.enabled;
+    }
+    async disableNode(nodeId: NodeId) {
+        const node = this._dispatcher.nodesTracker.getNode(nodeId);
+        node.enabled = false;
+        return node.enabled;
     }
     async queueJob(jobId: JobId, numTasks: number){
         this._dispatcher.queue.queueJob(jobId, numTasks);
