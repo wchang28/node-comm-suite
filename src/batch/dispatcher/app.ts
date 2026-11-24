@@ -75,6 +75,8 @@ dispatcher.on("dispatching", (sessionId) => {
     console.log(`<<job-killed>>: jobId=${jobId}`);
 }).on("job-kill-retry", (jobId, retryIndex, numProcessKilled) => {
     console.log(`<<job-kill-retry>>: jobId=${jobId}, retryIndex=${retryIndex}, numProcessKilled=${numProcessKilled}`);
+}).on("job-kill-error", (jobId, error) => {
+    console.log(`<<job-kill-error>>: jobId=${jobId}, error=${error}`);
 }).start();
 
 const nodesTracker = dispatcher.nodesTracker;

@@ -25,6 +25,7 @@ export interface DispatcherEvents {
     "killing-job": (jobId: JobId) => void;
     "job-killed": (jobId: JobId) => void;
     "job-kill-retry": (jobId: JobId, retryIndex: number, numProcessKilled: number) => void;
+    "job-kill-error": (jobId: JobId, error: unknown) => void;
     "enabled": () => void;
     "disabled": () => void;
     "dispatching": (sessionId: string) => void;
@@ -80,6 +81,8 @@ export class Dispatcher extends EventEmitter {
             this.safeEmit("job-killed", jobId);
         }).on("kill-retry", (jobId: JobId, retryIndex: number, numProcessKilled: number) => {
             this.safeEmit("job-kill-retry", jobId, retryIndex, numProcessKilled);
+        }).on("kill-error", (jobId: JobId, error: unknown) => {
+            this.safeEmit("job-kill-error", jobId, error);
         });
         this._nodesJobKiller = jobKiller;
         this._nodesSystemLoadPooling = new Pooling<void>(async () => {
