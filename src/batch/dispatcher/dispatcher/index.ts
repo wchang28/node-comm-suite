@@ -2,6 +2,7 @@ import express from 'express';
 import {RequestGetSet} from '../request-get-set.js';
 import { dispatcherControlPermissionMiddleware } from './permission.js';
 import { router as queueRouter } from './queue/index.js';
+import { router as nodeRouter } from './node/index.js';
 
 const router = express.Router();
 export { router };
@@ -24,3 +25,4 @@ router.get("/disable", dispatcherControlPermissionMiddleware, async (req: expres
 });
 
 router.use('/queue', queueRouter);  
+router.use('/node', nodeRouter);  
