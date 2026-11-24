@@ -237,11 +237,11 @@ app.use('/job', jobRouter);
 
 // Start server
 const server = app.listen(PORT, LISTEN_HOST, () => {
-    console.log(`SSE Server running on http://${LISTEN_HOST}:${PORT}`);
+    console.log(`Server running on http://${LISTEN_HOST}:${PORT}`);
     console.log(`Task launcher SSE endpoint: http://${LISTEN_HOST}:${PORT}/task-launcher/events`);
     console.log(`Dispatcher monitor SSE endpoint: http://${LISTEN_HOST}:${PORT}/dispatcher/events`);
     console.log(`Recent jobs monitor SSE endpoint: http://${LISTEN_HOST}:${PORT}/recent-jobs/events`);
-    console.log(`Connections monitor SSE endpoint: http://${LISTEN_HOST}:${PORT}/client-connections/events`);
+    console.log(`Client connections monitor SSE endpoint: http://${LISTEN_HOST}:${PORT}/client-connections/events`);
     console.log(`Health check: http://${LISTEN_HOST}:${PORT}/health`);
 });
 
