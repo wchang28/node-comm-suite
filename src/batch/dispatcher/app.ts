@@ -168,6 +168,9 @@ class LocalDispatcherAbstraction implements IDispatcherAbstraction {
     async queueJSON() {
         return this._dispatcher.queue.toJSON();
     }
+    async nodesTrackerJSON() {
+        return this._dispatcher.nodesTracker.toJSON();
+    }
     async nodeJSON(nodeId: NodeId) {
         const node = this._dispatcher.nodesTracker.node(nodeId);
         if (!node) {

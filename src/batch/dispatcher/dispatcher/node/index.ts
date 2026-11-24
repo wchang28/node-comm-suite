@@ -1,18 +1,15 @@
 import express from 'express';
 import {RequestGetSet} from '../../request-get-set.js';
 import { router as objRouter } from './obj-router.js';
-import type {NodeId, NodeInfoRow} from '../../../types.js';
+import type {NodeId} from '../../../types.js';
 
 const router = express.Router();
 export { router };
 
 router.get("/", async (req: express.Request, res: express.Response) => {
     const {dispatcher} = new RequestGetSet(req);
-    const dispatcherJSON = await dispatcher.toJSON();
-    res.json(dispatcherJSON.nodes);
+    res.json(await dispatcher.nodesTrackerJSON());
 });
-
-
 
 router.use('/:nodeId', async (req: express.Request, res: express.Response, next: express.NextFunction) => {
     const nodeId = req.params.nodeId as NodeId;
