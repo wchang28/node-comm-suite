@@ -14,6 +14,13 @@ import {StringWritable} from '../../../streams/string-stream.js';
 const router = express.Router();
 export { router };
 
+router.get("/most-recent", async (req, res) => {
+    const {poolDataPlaneDBPool, defaultMostRecentJobsLimit} = new RequestGetSet(req);
+    const limit = parseInt(req.query.limit as string) || defaultMostRecentJobsLimit;
+    const jobs = await poolDataPlaneDBPool.getMostRecentJobs(limit);
+    res.json(jobs);
+});
+
 interface CreateNewJobParams {
     description?: string | null;
     tag?: string | null;

@@ -24,6 +24,8 @@ const dbConfig = toDBConfig(JSON.parse(fs.readFileSync(dbConfigsPath, "utf8")) a
 console.log(`Using DB type: ${dbConfig.type}, schema: ${dbConfig.schema} (from ${dbConfigsPath})`);
 const poolDataPlaneDBPool = createPoolDataPlaneDBPool(dbConfig.type, dbConfig.connectConfig, dbConfig.schema);
 
+const DEFAULT_MOST_RECENT_JOBS_LIMIT: number = 300;
+
 const app = express();
 app.disable('x-powered-by');
 app.set('trust proxy', true);
@@ -43,9 +45,8 @@ app.get('/health', (req: Request, res: Response) => {
     });
 });
 
-
-const PING_INTERVAL_MS = 30000; // 30 seconds
-const REQUEST_TIMEOUT_MS = 30000; // 30 seconds
+const PING_INTERVAL_MS: number = 30000; // 30 seconds
+const REQUEST_TIMEOUT_MS: number = 30000; // 30 seconds
 
 const nodesConnectionManager = new RequestConnectionManager(PING_INTERVAL_MS, REQUEST_TIMEOUT_MS);
 
@@ -128,7 +129,7 @@ dispatchMonitor.on("queue-change", (data) => {
     console.log("DispatchMonitor <<stopped>>");
 }).start();
 
-const mostRecentJobsMonitor = new MostRecentJobsMonitor(poolDataPlaneDBPool, 300, 500);
+const mostRecentJobsMonitor = new MostRecentJobsMonitor(poolDataPlaneDBPool, DEFAULT_MOST_RECENT_JOBS_LIMIT, 500);
 mostRecentJobsMonitor
 .on("change", () => {
     recentJobsEventsConnector.broadcastNotification("change", mostRecentJobsMonitor.toJSON());
@@ -214,6 +215,7 @@ app.use(authorizationMiddleware, (req: Request, res: Response, next: NextFunctio
     const req_gs = new RequestGetSet(req);
     req_gs.poolDataPlaneDBPool = poolDataPlaneDBPool;
     req_gs.dispatcher = new LocalDispatcherAbstraction(dispatcher);
+    req_gs.defaultMostRecentJobsLimit = DEFAULT_MOST_RECENT_JOBS_LIMIT;
     req_gs.fetchSelf = (path: string, init?: RequestInit) => {
         if (req.headers.authorization) {
             if (!init) init = {};
@@ -226,8 +228,8 @@ app.use(authorizationMiddleware, (req: Request, res: Response, next: NextFunctio
 });
 
 app.get("/me", (req: Request, res: Response) => {
-    const req_gs = new RequestGetSet(req);
-    res.json(req_gs.user);
+    const {user} = new RequestGetSet(req);
+    res.json(user);
 });
 
 app.use('/dispatcher', dispatcherRouter);

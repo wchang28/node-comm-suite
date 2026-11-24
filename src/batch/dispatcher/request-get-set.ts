@@ -26,6 +26,12 @@ export class RequestGetSet {
     set dispatcher(dispatcher: IDispatcherAbstraction) {
         (this._request as any as { dispatcher: IDispatcherAbstraction }).dispatcher = dispatcher;
     }
+    get defaultMostRecentJobsLimit(): number {
+        return (this._request as any as { mostRecentJobsLimit: number }).mostRecentJobsLimit;
+    }
+    set defaultMostRecentJobsLimit(limit: number) {
+        (this._request as any as { mostRecentJobsLimit: number }).mostRecentJobsLimit = limit;
+    }
     get job(): Job {
         return (this._request as any as { job: Job }).job;
     }
