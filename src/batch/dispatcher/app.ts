@@ -167,10 +167,10 @@ class LocalDispatcherAbstraction implements IDispatcherAbstraction {
         return this._dispatcher.queueJSON;
     }
     async nodesTrackerJSON() {
-        return this._dispatcher.nodesTracker.toJSON();
+        return this._dispatcher.nodesTrackerJSON;
     }
     async nodeJSON(nodeId: NodeId) {
-        const node = this._dispatcher.nodesTracker.node(nodeId);
+        const node = this._dispatcher.node(nodeId);
         if (!node) {
             return null;
         } else {
@@ -178,7 +178,7 @@ class LocalDispatcherAbstraction implements IDispatcherAbstraction {
         }
     }
     async setNodesEnabled(nodeIds: NodeId[] | null, enabled: boolean) {
-        this._dispatcher.nodesTracker.setNodesEnabled(nodeIds, enabled);
+        this._dispatcher.setNodesEnabled(nodeIds, enabled);
     }
     async queueJob(jobId: JobId, numTasks: number){
         this._dispatcher.queueJob(jobId, numTasks);

@@ -12,6 +12,7 @@ import type {
     DispatcherStates,
     DispatcherJSON,
     QueueJSON,
+    NodesTrackerJSON,
     JobKillStatRow
 } from '../types.js';
 import { NodesJobKiller } from './nodes-job-killer.js';
@@ -21,7 +22,9 @@ export interface DispatcherEvents {
     "change": () => void;
     "state-change": (oldState: DispatcherState, newState: DispatcherState) => void;
     "queue-change": () => void;
+    "nodes-tracker-change": () => void;   
     "job-killer-change": () => void;
+    "node-added": (node: Node) => void;
     "killing-job": (jobId: JobId) => void;
     "job-killed": (jobId: JobId) => void;
     "job-kill-retry": (jobId: JobId, retryIndex: number, numProcessKilled: number) => void;
@@ -41,7 +44,7 @@ export class Dispatcher extends EventEmitter {
     private _state: DispatcherState = "stopped";
     private _enabled: boolean = true;
     private _queue: Queue = new Queue();
-    public nodesTracker: NodesTracker = new NodesTracker();
+    private _nodesTracker: NodesTracker = new NodesTracker();
     private _currentDispatchSession: DispatchSession | null = null;
     private _nodesJobKiller: NodesJobKiller;
     private _nodesSystemLoadPooling: Pooling<void>;
@@ -53,26 +56,30 @@ export class Dispatcher extends EventEmitter {
                 const result = await connection.request<NodeIdentifyInfo>("/identify", "GET");  // ask the node to identify itself
                 const {sessionId, hostname, totalTaskSlots, currentLoading} = result;
                 const node = new Node(connection, nodeId, sessionId, hostname, totalTaskSlots, currentLoading);
-                this.nodesTracker.addNode(node);
+                this._nodesTracker.addNode(node);
             } catch (err) {}
         }).on("disconnected", (connection) => {
             const nodeId = connection.connId;
-            this.nodesTracker.removeNode(nodeId);
+            this._nodesTracker.removeNode(nodeId);
         });
         this._queue.on("tasks-queued", () => {
             this.dispatchTasksIfNecessary();
         }).on("change", () => {
             this.safeEmit('queue-change');
         });
-        this.nodesTracker.on("task-slots-change", () => {
+        this._nodesTracker.on("task-slots-change", () => {
             this.dispatchTasksIfNecessary();
+        }).on("change", () => {
+            this.safeEmit("nodes-tracker-change");
+        }).on("node-added", (node) => {
+            this.safeEmit("node-added", node);
         });
         this.on("enabled", () => {
             this.dispatchTasksIfNecessary();
         }).on("dispatch-completed", () => {
             this.dispatchTasksIfNecessary();
         });
-        const jobKiller = new NodesJobKiller(this.nodesTracker, jobKillRetries, jobKillTryIntervalMS);
+        const jobKiller = new NodesJobKiller(this._nodesTracker, jobKillRetries, jobKillTryIntervalMS);
         jobKiller.on("change", () => {
             this.safeEmit("job-killer-change");
         }).on("killing", (jobId: JobId) => {
@@ -86,7 +93,7 @@ export class Dispatcher extends EventEmitter {
         });
         this._nodesJobKiller = jobKiller;
         this._nodesSystemLoadPooling = new Pooling<void>(async () => {
-            await this.nodesTracker.updateNodesSystemLoading();
+            await this._nodesTracker.updateNodesSystemLoading();
         }, 30000);  // update system loading every 30 seconds
     }
     get state(): DispatcherState {
@@ -154,10 +161,10 @@ export class Dispatcher extends EventEmitter {
     }
     private async dispatchTasksIfNecessary() {
         if (this._enabled && !this.dispatching && !this._queue.isEmpty) {
-            const usableTaskSlots = this.nodesTracker.usableTaskSlots;
+            const usableTaskSlots = this._nodesTracker.usableTaskSlots;
             if (usableTaskSlots.length > 0) {
                 const tasks = this._queue.dequeueTasks(usableTaskSlots.length);
-                const dispatchSession = new DispatchSession(this.nodesTracker);
+                const dispatchSession = new DispatchSession(this._nodesTracker);
                 this.currentDispatchingSession = dispatchSession;   // mark the start of a dispatch session
                 const nodeToBeDispatchedOneTaskListener = (nodeId: NodeId, taskItem: TaskItem) => {
                     this.safeEmit("node-to-be-dispatched-one-task", nodeId, taskItem);
@@ -166,7 +173,7 @@ export class Dispatcher extends EventEmitter {
                     this.safeEmit("one-task-dispatched", row);
                 };
                 dispatchSession.once("task-slots-usage-assignment", (taskSlotsUsage) => {
-                    this.nodesTracker.increaseTaskSlotsUsageOnNodes(taskSlotsUsage); // increase task slots usage on nodes based on the dispatch assignments by assuming every task dispatch to the node is successful.
+                    this._nodesTracker.increaseTaskSlotsUsageOnNodes(taskSlotsUsage); // increase task slots usage on nodes based on the dispatch assignments by assuming every task dispatch to the node is successful.
                 })
                 .on("node-to-be-dispatched-one-task", nodeToBeDispatchedOneTaskListener)
                 .on("one-task-dispatched", oneTaskDispatchedListener)
@@ -174,7 +181,7 @@ export class Dispatcher extends EventEmitter {
                 const errors = await dispatchSession.dispatch(usableTaskSlots, tasks);
                 dispatchSession.off("node-to-be-dispatched-one-task", nodeToBeDispatchedOneTaskListener);
                 dispatchSession.off("one-task-dispatched", oneTaskDispatchedListener);
-                this.nodesTracker.decreaseTaskSlotsUsageOnNodes(errors);  // for nodes where task dispatch failed, decrease/release the task slots usage accordingly
+                this._nodesTracker.decreaseTaskSlotsUsageOnNodes(errors);  // for nodes where task dispatch failed, decrease/release the task slots usage accordingly
                 this.currentDispatchingSession = null;   // mark the end of a dispatch session
             }
         }
@@ -194,6 +201,12 @@ export class Dispatcher extends EventEmitter {
         } else {
             throw new Error(`Cannot queue job "${jobId}" because dispatcher is not started.`);
         }
+    }
+    node(nodeId: NodeId) : Node | undefined {
+        return this._nodesTracker.node(nodeId);
+    }
+    setNodesEnabled(nodeIds: NodeId[] | null, enabled: boolean) {
+        this._nodesTracker.setNodesEnabled(nodeIds, enabled);
     }
     async killJob(jobId: JobId) {
         if (this.state == "started") {
@@ -236,15 +249,18 @@ export class Dispatcher extends EventEmitter {
     get queueJSON(): QueueJSON {
         return this._queue.toJSON();
     }
+    get nodesTrackerJSON(): NodesTrackerJSON {
+        return this._nodesTracker.toJSON();
+    }
     get jobKillerJSON(): JobKillStatRow[] {
         return this._nodesJobKiller.toJSON();
     }
     toJSON(): DispatcherJSON {
         return {
             states: this.states,
-            queue: this._queue.toJSON(),
-            nodes: this.nodesTracker.toJSON(),
-            jobsKillStats: this._nodesJobKiller.toJSON()
+            queue: this.queueJSON,
+            nodes: this.nodesTrackerJSON,
+            jobsKillStats: this.jobKillerJSON
         };
     }
     on<K extends keyof DispatcherEvents>(

@@ -38,7 +38,7 @@ export class DispatchMonitor extends EventEmitter {
                 this.queueDirty = true;
             }
         });
-        dispatcher.nodesTracker.on("change", () => {
+        dispatcher.on("nodes-tracker-change", () => {
             if (!this.nodesDirty) {
                 this.nodesDirty = true;
             }
@@ -58,7 +58,7 @@ export class DispatchMonitor extends EventEmitter {
             }
             if (this.nodesDirty) {
                 this.nodesDirty = false;
-                this.safeEmit("nodes-change", dispatcher.nodesTracker.toJSON());
+                this.safeEmit("nodes-change", dispatcher.nodesTrackerJSON);
             }
             if (this.dispatcherDirty) {
                 this.dispatcherDirty = false;
