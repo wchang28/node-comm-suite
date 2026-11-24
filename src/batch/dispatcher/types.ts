@@ -1,4 +1,4 @@
-import { JobId } from '../types.js';
+import { JobId, DispatcherJSON } from '../types.js';
 
 export interface IDispatcherAbstraction {
     enable(): Promise<boolean>; // enable the dispatcher
@@ -9,7 +9,7 @@ export interface IDispatcherAbstraction {
     isQueueClosed(): Promise<boolean>; // return whether the dispatcher's queue is closed
     queueJob(jobId: JobId, numTasks: number): Promise<void>; // queue a job with the given number of tasks
     killJob(jobId: JobId): Promise<void>; // kill the specified job
-    toJSON(): Promise<any>; // return the JSON representation of the dispatcher
+    toJSON(): Promise<DispatcherJSON>; // return the JSON representation of the dispatcher
 }
 
 export type SelfFetchFunction = (path: string, init?: RequestInit) => Promise<globalThis.Response>;
