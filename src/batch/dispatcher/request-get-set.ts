@@ -1,7 +1,8 @@
 import type { Request } from 'express';
 import type { IPoolDataPlaneDBPool } from './db-pools.js';
-import type { User, Job } from '../types.js';
+import type { User, Job, NodeInfoRow } from '../types.js';
 import type { IDispatcherAbstraction, SelfFetchFunction } from './types.js';
+import { info } from 'console';
 
 export class RequestGetSet {
     constructor(private _request: Request) {
@@ -30,6 +31,12 @@ export class RequestGetSet {
     }
     set job(job: Job) {
         (this._request as any as { job: Job }).job = job;
+    }
+    get node(): NodeInfoRow {
+        return (this._request as any as { node: NodeInfoRow }).node;
+    }
+    set node(node: NodeInfoRow) {
+        (this._request as any as { node: NodeInfoRow }).node = node;
     }
     get fetchSelf(): SelfFetchFunction {
         return (this._request as any as { fetchSelf: SelfFetchFunction }).fetchSelf;
