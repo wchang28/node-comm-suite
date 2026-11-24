@@ -20,7 +20,7 @@ sequenceGenerator
 .on("started", () => {
     console.log("Sequence number generator <<started>>");
 }).on("stopped", () => {
-    console.log("Sequence numbergenerator <<stopped>>");
+    console.log("Sequence number generator <<stopped>>");
 }).on("stopping", () => {
     console.log("Sequence number generator <<stopping>>");
 })
