@@ -69,6 +69,12 @@ dispatcher.on("dispatching", (sessionId) => {
     console.log(`Dispatcher <<stopping>>`);
 }).on("stopped", () => {
     console.log(`Dispatcher <<stopped>>`);
+}).on("killing-job", (jobId) => {
+    console.log(`<<killing-job>>: jobId=${jobId}`);
+}).on("job-killed", (jobId) => {
+    console.log(`<<job-killed>>: jobId=${jobId}`);
+}).on("job-kill-retry", (jobId, retryIndex, numProcessKilled) => {
+    console.log(`<<job-kill-retry>>: jobId=${jobId}, retryIndex=${retryIndex}, numProcessKilled=${numProcessKilled}`);
 }).start();
 
 const nodesTracker = dispatcher.nodesTracker;
@@ -80,17 +86,6 @@ nodesTracker.on("node-added", (node) => {
     console.log(`NodesTracker <<changed>>. Current nodes: ${nodesTracker.numNodes}, Usable Task Slots: ${nodesTracker.numUsableTaskSlots}`);
 }).on("task-finished-on-node", (node, payload) => {
     console.log(`Node ${node.hostname} (ID: ${node.id}) <<task-finished-on-node>>:`, JSON.stringify(payload));
-});
-
-const jobKiller = dispatcher.nodesJobKiller;
-jobKiller.on("killing", (jobId) => {
-    console.log(`<<killing-job>>: jobId=${jobId}`);
-}).on("killed", (jobId) => {
-    console.log(`<<job-killed>>: jobId=${jobId}`);
-}).on("kill-retry", (jobId, retryIndex, numProcessKilled) => {
-    console.log(`<<job-kill-retry>>: jobId=${jobId}, retryIndex=${retryIndex}, numProcessKilled=${numProcessKilled}`);
-}).on("change", () => {
-    console.log(`JobKiller <<change>>:`, JSON.stringify(jobKiller.toJSON()));
 });
 
 const taskLauncherRouter = express.Router();
@@ -156,18 +151,18 @@ class LocalDispatcherAbstraction implements IDispatcherAbstraction {
         return this._dispatcher.enabled;
     }
     async closeQueue() {
-        this._dispatcher.queue.closed = true;
-        return this._dispatcher.queue.closed;
+        this._dispatcher.closeQueue();
+        return this._dispatcher.queueClosed;
     }
     async openQueue() {
-        this._dispatcher.queue.closed = false;
-        return this._dispatcher.queue.closed;
+        this._dispatcher.openQueue();
+        return this._dispatcher.queueClosed;
     }
     async isQueueClosed() {
-        return this._dispatcher.queue.closed;
+        return this._dispatcher.queueClosed;
     }
     async queueJSON() {
-        return this._dispatcher.queue.toJSON();
+        return this._dispatcher.queueJSON;
     }
     async nodesTrackerJSON() {
         return this._dispatcher.nodesTracker.toJSON();
@@ -184,7 +179,7 @@ class LocalDispatcherAbstraction implements IDispatcherAbstraction {
         this._dispatcher.nodesTracker.setNodesEnabled(nodeIds, enabled);
     }
     async queueJob(jobId: JobId, numTasks: number){
-        this._dispatcher.queue.queueJob(jobId, numTasks);
+        this._dispatcher.queueJob(jobId, numTasks);
     }
     async killJob(jobId: JobId) {
         await this._dispatcher.killJob(jobId);

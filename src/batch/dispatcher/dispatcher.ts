@@ -3,12 +3,28 @@ import { ConnectionManager } from '../../sse-request/connection-manager.js';
 import { Queue} from './queue.js';
 import { Node, NodesTracker } from './nodes.js'
 import { DispatchSession, DispatchResultRow } from './dispatch-session.js';
-import { JobId, NodeIdentifyInfo, NodeId, TaskItem,  DispatcherStates, DispatcherJSON } from '../types.js';
+import type {
+    JobId,
+    NodeIdentifyInfo,
+    NodeId,
+    TaskItem,
+    DispatcherState,
+    DispatcherStates,
+    DispatcherJSON,
+    QueueJSON,
+    JobKillStatRow
+} from '../types.js';
 import { NodesJobKiller } from './nodes-job-killer.js';
 import {Pooling} from "../../pooling.js";
 
 export interface DispatcherEvents {
     "change": () => void;
+    "state-change": (oldState: DispatcherState, newState: DispatcherState) => void;
+    "queue-change": () => void;
+    "job-killer-change": () => void;
+    "killing-job": (jobId: JobId) => void;
+    "job-killed": (jobId: JobId) => void;
+    "job-kill-retry": (jobId: JobId, retryIndex: number, numProcessKilled: number) => void;
     "enabled": () => void;
     "disabled": () => void;
     "dispatching": (sessionId: string) => void;
@@ -21,16 +37,16 @@ export interface DispatcherEvents {
 }
 
 export class Dispatcher extends EventEmitter {
+    private _state: DispatcherState = "stopped";
     private _enabled: boolean = true;
-    public queue: Queue = new Queue();
+    private _queue: Queue = new Queue();
     public nodesTracker: NodesTracker = new NodesTracker();
     private _currentDispatchSession: DispatchSession | null = null;
-    public nodesJobKiller: NodesJobKiller;
+    private _nodesJobKiller: NodesJobKiller;
     private _nodesSystemLoadPooling: Pooling<void>;
-    constructor(private _connectionManager: ConnectionManager, jobKillRetries: number = 2, jobKillTryIntervalMS: number = 2000) {
+    constructor(connectionManager: ConnectionManager, jobKillRetries: number = 2, jobKillTryIntervalMS: number = 2000) {
         super();
-        this.nodesJobKiller = new NodesJobKiller(this.nodesTracker, jobKillRetries, jobKillTryIntervalMS);
-        this._connectionManager.on("connected", async (connection) => {
+        connectionManager.on("connected", async (connection) => {
             try {
                 const nodeId = connection.connId;
                 const result = await connection.request<NodeIdentifyInfo>("/identify", "GET");  // ask the node to identify itself
@@ -42,8 +58,10 @@ export class Dispatcher extends EventEmitter {
             const nodeId = connection.connId;
             this.nodesTracker.removeNode(nodeId);
         });
-        this.queue.on("tasks-queued", () => {
+        this._queue.on("tasks-queued", () => {
             this.dispatchTasksIfNecessary();
+        }).on("change", () => {
+            this.safeEmit('queue-change');
         });
         this.nodesTracker.on("task-slots-change", () => {
             this.dispatchTasksIfNecessary();
@@ -53,17 +71,38 @@ export class Dispatcher extends EventEmitter {
         }).on("dispatch-completed", () => {
             this.dispatchTasksIfNecessary();
         });
-        const nodesSystemLoadPooling = new Pooling<void>(async () => {
+        const jobKiller = new NodesJobKiller(this.nodesTracker, jobKillRetries, jobKillTryIntervalMS);
+        jobKiller.on("change", () => {
+            this.safeEmit("job-killer-change");
+        }).on("killing", (jobId: JobId) => {
+            this.safeEmit("killing-job", jobId);
+        }).on("killed", (jobId: JobId) => {
+            this.safeEmit("job-killed", jobId);
+        }).on("kill-retry", (jobId: JobId, retryIndex: number, numProcessKilled: number) => {
+            this.safeEmit("job-kill-retry", jobId, retryIndex, numProcessKilled);
+        });
+        this._nodesJobKiller = jobKiller;
+        this._nodesSystemLoadPooling = new Pooling<void>(async () => {
             await this.nodesTracker.updateNodesSystemLoading();
         }, 30000);  // update system loading every 30 seconds
-        nodesSystemLoadPooling.on("started", () => {
-            this.safeEmit('started');
-        }).on("stopping", () => {
-            this.safeEmit('stopping');
-        }).on("stopped", () => {
-            this.safeEmit('stopped');
-        });
-        this._nodesSystemLoadPooling = nodesSystemLoadPooling;
+    }
+    get state(): DispatcherState {
+        return this._state;
+    }
+    private set state(newState: DispatcherState) {
+        const oldState = this._state;
+        if (oldState !== newState) {
+            this._state = newState;
+            if (newState == "started") {
+                this.safeEmit('started');
+            } else if (newState == "stopping") {
+                this.safeEmit('stopping');
+            } else if (newState == "stopped") {
+                this.safeEmit('stopped');
+            }
+            this.safeEmit('state-change', oldState, newState);
+            this.safeEmit('change');
+        }
     }
     get enabled(): boolean {
         return this._enabled;
@@ -111,10 +150,10 @@ export class Dispatcher extends EventEmitter {
         }
     }
     private async dispatchTasksIfNecessary() {
-        if (this._enabled && !this.dispatching && !this.queue.isEmpty) {
+        if (this._enabled && !this.dispatching && !this._queue.isEmpty) {
             const usableTaskSlots = this.nodesTracker.usableTaskSlots;
             if (usableTaskSlots.length > 0) {
-                const tasks = this.queue.dequeueTasks(usableTaskSlots.length);
+                const tasks = this._queue.dequeueTasks(usableTaskSlots.length);
                 const dispatchSession = new DispatchSession(this.nodesTracker);
                 this.currentDispatchingSession = dispatchSession;   // mark the start of a dispatch session
                 const nodeToBeDispatchedOneTaskListener = (nodeId: NodeId, taskItem: TaskItem) => {
@@ -137,38 +176,72 @@ export class Dispatcher extends EventEmitter {
             }
         }
     }
-    async killJob(jobId: JobId) {
-        this.queue.removeJob(jobId);    // remove the job tasks from the dispatch queue
-        await this.nodesJobKiller.killJob(jobId);   // kill the job on the nodes
+    closeQueue() {
+        this._queue.closed = true;
     }
-    get killingJob(): boolean {
-        return this.nodesJobKiller.killing;
+    openQueue() {
+        this._queue.closed = false;
+    }
+    get queueClosed(): boolean {
+        return this._queue.closed;
+    }
+    queueJob(jobId: JobId, numTasks: number) {
+        if (this.state == "started") {
+            this._queue.queueJob(jobId, numTasks);
+        } else {
+            throw new Error(`Cannot queue job "${jobId}" because dispatcher is not started.`);
+        }
+    }
+    async killJob(jobId: JobId) {
+        if (this.state == "started") {
+            this._queue.removeJob(jobId);    // remove the job tasks from the dispatch queue
+            await this._nodesJobKiller.killJob(jobId);   // kill the job on the nodes
+        } else {
+            throw new Error(`Cannot kill job "${jobId}" because dispatcher is not started.`);
+        }
+    }
+    get isKillingJob(): boolean {
+        return this._nodesJobKiller.killing;
     }
     get killingJobId(): JobId | null {
-        return this.nodesJobKiller.killingJobId;
+        return this._nodesJobKiller.killingJobId;
     }
     start() {
-        this._nodesSystemLoadPooling.start();
-        this.nodesJobKiller.start();
+        if (this.state == "stopped") {
+            this._nodesSystemLoadPooling.start();
+            this._nodesJobKiller.start();
+            this.state = "started";
+        }
     }
     async stop() {
-        this.queue.clear();
-        await this.forIdle();
-        await this._nodesSystemLoadPooling.stop();
-        await this.nodesJobKiller.stop();
+        if (this.state == "started") {
+            this.state = "stopping";
+            this._queue.clear();
+            await this.forIdle();
+            await this._nodesSystemLoadPooling.stop();
+            await this._nodesJobKiller.stop();
+            this.state = "stopped";
+        }
     }
     get states(): DispatcherStates {
         return {
+            state: this._state,
             enabled: this._enabled,
             dispatching: this.dispatching
         };
     }
+    get queueJSON(): QueueJSON {
+        return this._queue.toJSON();
+    }
+    get jobKillerJSON(): JobKillStatRow[] {
+        return this._nodesJobKiller.toJSON();
+    }
     toJSON(): DispatcherJSON {
         return {
             states: this.states,
-            queue: this.queue.toJSON(),
+            queue: this._queue.toJSON(),
             nodes: this.nodesTracker.toJSON(),
-            jobsKillStats: this.nodesJobKiller.toJSON()
+            jobsKillStats: this._nodesJobKiller.toJSON()
         };
     }
     on<K extends keyof DispatcherEvents>(

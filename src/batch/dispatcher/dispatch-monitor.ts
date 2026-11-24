@@ -33,7 +33,7 @@ export class DispatchMonitor extends EventEmitter {
     }
     constructor(dispatcher: Dispatcher, poolingIntervalMS: number = 1000) {
         super();
-        dispatcher.queue.on("change", () => {
+        dispatcher.on("queue-change", () => {
             if (!this.queueDirty) {
                 this.queueDirty = true;
             }
@@ -43,8 +43,8 @@ export class DispatchMonitor extends EventEmitter {
                 this.nodesDirty = true;
             }
         });
-        dispatcher.nodesJobKiller.on("change", () => {
-            this.safeEmit("job-killer-change", dispatcher.nodesJobKiller.toJSON());
+        dispatcher.on("job-killer-change", () => {
+            this.safeEmit("job-killer-change", dispatcher.jobKillerJSON);
         });
         dispatcher.on("change", () => {
             if (!this.dispatcherDirty) {
@@ -54,7 +54,7 @@ export class DispatchMonitor extends EventEmitter {
         const pooling = new Pooling<void>(async () => {
             if (this.queueDirty) {
                 this.queueDirty = false;
-                this.safeEmit("queue-change", dispatcher.queue.toJSON());
+                this.safeEmit("queue-change", dispatcher.queueJSON);
             }
             if (this.nodesDirty) {
                 this.nodesDirty = false;

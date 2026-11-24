@@ -207,7 +207,10 @@ export interface JobKillStatRow {
     state: JobKillState;
 }
 
+export type DispatcherState = "started" | "stopping" | "stopped";
+
 export interface DispatcherStates {
+    state: DispatcherState;
     enabled: boolean;
     dispatching: boolean;
 }
