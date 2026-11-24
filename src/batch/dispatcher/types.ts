@@ -10,8 +10,7 @@ export interface IDispatcherAbstraction {
     queueJSON(): Promise<QueueJSON>; // return the JSON representation of the dispatcher's queue
     nodesTrackerJSON(): Promise<NodesTrackerJSON>; // return the JSON representation of the nodes tracker
     nodeJSON(nodeId: NodeId): Promise<NodeInfoRow | null>; // return the JSON representation of the specified node
-    enableNode(nodeId: NodeId): Promise<boolean>; // enable the specified node
-    disableNode(nodeId: NodeId): Promise<boolean>; // disable the specified node
+    setNodesEnabled(nodeIds: NodeId[] | null, enabled: boolean): Promise<void>; // enable or disable multiple nodes by their IDs, or all nodes if nodeIds is null or empty
     queueJob(jobId: JobId, numTasks: number): Promise<void>; // queue a job with the given number of tasks
     killJob(jobId: JobId): Promise<void>; // kill the specified job
     toJSON(): Promise<DispatcherJSON>; // return the JSON representation of the dispatcher

@@ -313,6 +313,21 @@ export class NodesTracker extends EventEmitter implements INodeTaskDispatcher {
             throw new Error(`Node with ID ${nodeId} not found`);
         }
     }
+    // enable or disable multiple nodes by their IDs, or all nodes if nodeIds is null or empty
+    setNodesEnabled(nodeIds: NodeId[] | null, enabled: boolean): void {
+        if (nodeIds != null && nodeIds.length > 0) {
+            for (const nodeId of nodeIds) {
+                const node = this._nodes.get(nodeId);
+                if (node) {
+                    node.enabled = enabled;
+                }
+            }
+        } else {
+            for (const node of this._nodes.values()) {
+                node.enabled = enabled;
+            }
+        }
+    }
     get numNodes(): number {
         return this._nodes.size;
     }

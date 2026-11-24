@@ -22,12 +22,12 @@ const endware = async (req: express.Request, res: express.Response) => {
 
 router.get("/enable", dispatcherControlPermissionMiddleware, async (req: express.Request, res: express.Response, next: express.NextFunction) => {
     const {node, dispatcher} = new RequestGetSet(req);
-    await dispatcher.enableNode(node.id);
+    await dispatcher.setNodesEnabled([node.id], true);
     next();
 }, endware);
 
 router.get("/disable", dispatcherControlPermissionMiddleware, async (req: express.Request, res: express.Response, next: express.NextFunction) => {
     const {node, dispatcher} = new RequestGetSet(req);
-    await dispatcher.disableNode(node.id);
+    await dispatcher.setNodesEnabled([node.id], false);
     next();
 }, endware);

@@ -179,15 +179,8 @@ class LocalDispatcherAbstraction implements IDispatcherAbstraction {
             return node.toJSON();
         }
     }
-    async enableNode(nodeId: NodeId) {
-        const node = this._dispatcher.nodesTracker.getNode(nodeId);
-        node.enabled = true;
-        return node.enabled;
-    }
-    async disableNode(nodeId: NodeId) {
-        const node = this._dispatcher.nodesTracker.getNode(nodeId);
-        node.enabled = false;
-        return node.enabled;
+    async setNodesEnabled(nodeIds: NodeId[] | null, enabled: boolean) {
+        this._dispatcher.nodesTracker.setNodesEnabled(nodeIds, enabled);
     }
     async queueJob(jobId: JobId, numTasks: number){
         this._dispatcher.queue.queueJob(jobId, numTasks);
