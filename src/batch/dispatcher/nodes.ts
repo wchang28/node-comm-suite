@@ -222,13 +222,11 @@ export class Node extends EventEmitter {
     }
     // wait for node to become idle
     async forIdle() {
-        let idlePrmmise: Promise<void> = Promise.resolve();
         if (!this.idle) {
-            idlePrmmise = new Promise<void>((resolve) => {
+            await new Promise<void>((resolve) => {
                 this.once("idle", () => resolve());
             });
         }
-        await idlePrmmise;
     }
     // return whether the node is a candidate for dismounting
     get dismountableCandidate() : boolean {

@@ -70,7 +70,7 @@ export class Dispatcher extends EventEmitter {
             this.dispatchTasksIfNecessary();
         }).on("change", () => {
             this.safeEmit('queue-change');
-        }).on("queue-empty", () => {
+        }).on("empty", () => {
             this.safeEmit("queue-empty");
         });
         this._nodesTracker.on("task-slots-change", () => {
@@ -146,16 +146,12 @@ export class Dispatcher extends EventEmitter {
     }
     // await for the dispatcher becomes idle (no current dispatch session)
     async forIdle() {
-        let idlePromise: Promise<void> = Promise.resolve();
         if (this._currentDispatchSession !== null) {    // currenly dispatching tasks
             const dispatchSession = this._currentDispatchSession;
-            idlePromise = new Promise<void>((resolve) => {
-                dispatchSession.once("session-completed", () => {
-                    resolve();
-                });
+            await new Promise<void>((resolve) => {
+                dispatchSession.once("session-completed", () => resolve());
             });
         }
-        await idlePromise;
     }
     private set currentDispatchingSession(session: DispatchSession | null) {
         if (this._currentDispatchSession == null && session !== null) { // Idle -> Dispatching
@@ -204,6 +200,9 @@ export class Dispatcher extends EventEmitter {
     }
     get queueClosed(): boolean {
         return this._queue.closed;
+    }
+    get queueEmpty(): boolean {
+        return this._queue.isEmpty;
     }
     queueJob(jobId: JobId, numTasks: number) {
         if (this.state == "started") {
@@ -257,10 +256,11 @@ export class Dispatcher extends EventEmitter {
     async stop() {
         if (this.state == "started") {
             this.state = "stopping";
-            this._queue.clear();
-            await this.forIdle();
-            await this._nodesSystemLoadPooling.stop();
-            await this._nodesJobKiller.stop();
+            this._queue.clear();    // clear the tasks queue
+            await this._queue.forEmpty();   // wait for the queue to become empty
+            await this.forIdle();   // wait for any dispatch session to end
+            await this._nodesSystemLoadPooling.stop();  // stop the system load pooling
+            await this._nodesJobKiller.stop();  // stop the job killer
             this.state = "stopped";
         }
     }

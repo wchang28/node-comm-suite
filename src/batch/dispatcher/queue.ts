@@ -7,7 +7,7 @@ export interface QueueEvents {
     "tasks-queued": () => void;
     "job-queued": (jobId: JobId, numTasks: number) => void;
     "job-dequeued": (jobId: JobId) => void;
-    "queue-empty": () => void;
+    "empty": () => void;
     "opened": () => void;
     "closed": () => void;
     "change": () => void;
@@ -105,7 +105,7 @@ export class Queue extends EventEmitter {
             assert(index !== -1, `Job ID ${jobId} not found in jobs list.`);
             this._jobsList.splice(index, 1);
             if (this.isEmpty) {
-                this.safeEmit("queue-empty");
+                this.safeEmit("empty");
             }
             this.safeEmit("change");
         }
@@ -131,7 +131,7 @@ export class Queue extends EventEmitter {
                 this._jobsList.splice(jobIndexPicked, 1);
                 this.safeEmit("job-dequeued", jobIdPicked);
                 if (this.isEmpty) {
-                    this.safeEmit("queue-empty");
+                    this.safeEmit("empty");
                 }
             }
         }
@@ -140,13 +140,23 @@ export class Queue extends EventEmitter {
         }
         return ret;
     }
+    // Clears all jobs from the queue and emits appropriate events if any jobs were removed.
     clear(): void {
+        const n = this._jobsList.length;
         this._queue.clear();
         this._jobsList = [];
-        if (this.isEmpty) {
-            this.safeEmit("queue-empty");
+        if (n > 0) {
+            this.safeEmit("empty");
+            this.safeEmit("change");
         }
-        this.safeEmit("change");
+    }
+    // await for the queue to become empty
+    async forEmpty() {
+        if (!this.isEmpty) {
+            await new Promise<void>((resolve) => {
+                this.once("empty", () => resolve());
+            });
+        }
     }
     toJSON(): QueueJSON {
         const jobsArray: { jobId: JobId; numTasks: number }[] = [];

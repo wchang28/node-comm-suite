@@ -11,6 +11,7 @@ interface Job<I, O> {
 interface QueueEvents<I, O> {
     "enqueue": (job: Job<I, O>) => void;
     "dequeue": (job: Job<I, O>) => void;
+    "empty": () => void;
     "change": () => void;
 }
 
@@ -49,6 +50,9 @@ class Queue<I, O> extends EventEmitter {
         const job = this.jobs_.shift();
         if (job) {
             this.safeEmit("dequeue", job);
+            if (this.isEmpty) {
+                this.safeEmit("empty");
+            }
             this.safeEmit("change");
         }
         return job;
@@ -59,13 +63,27 @@ class Queue<I, O> extends EventEmitter {
     get jobs(): readonly Job<I, O>[] {
         return this.jobs_;
     }
+    get isEmpty(): boolean {
+        return (this.jobs_.length === 0);
+    }
     // Clears the queue and rejects all pending jobs with an "Job aborted" error.
     clear(): void {
+        const n = this.jobs_.length;
         for (const job of this.jobs_) {
             job.reject(new Error("Job aborted"));
         }
         this.jobs_ = [];
-        this.safeEmit("change");
+        if (n > 0) {
+            this.safeEmit("empty");
+            this.safeEmit("change");
+        }
+    }
+    async forEmpty() {
+        if (!this.isEmpty) {
+            await new Promise<void>((resolve) => {
+                this.once("empty", () => resolve());
+            });
+        }
     }
 }
 
@@ -221,15 +239,11 @@ export class SequentialProcessor<I, O> extends EventEmitter {
     }
     // await for the processor to become idle
     async forIdle() {
-        let idlePromise: Promise<void> = Promise.resolve();
         if (!this.idle) {    // currenly processing job
-            idlePromise = new Promise<void>((resolve) => {
-                this.once("idle", () => {
-                    resolve();
-                });
+            await new Promise<void>((resolve) => {
+                this.once("idle", () => resolve());
             });
         }
-        await idlePromise;
     }
     // Returns an array of inputs currently queued for processing.
     get queuedInputs(): I[] {
@@ -257,6 +271,7 @@ export class SequentialProcessor<I, O> extends EventEmitter {
         if (this.state === "started") {
             this.state = "stopping";
             this.queue_.clear();    // clear the queue
+            await this.queue_.forEmpty();   // wait for the queue to become empty
             await this.forIdle(); // wait for the processor to become idle
             this.state = "stopped";
         }
