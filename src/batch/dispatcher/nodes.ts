@@ -26,6 +26,7 @@ export interface NodeEvents {
     "change": () => void;
     "enabled": () => void;
     "disabled": () => void;
+    "idle": () => void; // fired when the node becomes idle
     "task-slots-change": () => void; // fire when any (available/usable) task slots related change
     "task-finished": (payload: TaskFinishedMsgPayload) => void; // fired when a task has finished on this node
 }
@@ -33,6 +34,7 @@ export interface NodeEvents {
 export class Node extends EventEmitter {
     private _enabled: boolean = true;
     private _numAvailableTaskSlots: number;
+    private _lastIdleTime: number;
     constructor(private _connection: Connection, public id: NodeId, public sessionId: NodeSessionId, public hostname: NodeName, public totalTaskSlots: number, private _currentLoading: SystemLoadingInfo) {
         super();
         assert(this.id, "Node ID must be defined");
@@ -41,6 +43,7 @@ export class Node extends EventEmitter {
         assert(this.hostname, `Node hostname must be defined (node=${id})`);
         assert(this.totalTaskSlots > 0, `Total CPUs must be greater than 0 (node=${id}, totalTaskSlots=${totalTaskSlots})`);
         this._numAvailableTaskSlots = this.totalTaskSlots;
+        this._lastIdleTime = Date.now();
         this._connection.on("message", (event: string, data?: any) => { // the connection received a message
             if (event === "task-finished") {    // one task is finished on this node
                 this.increaseAvailableTaskSlots(1);   // increase the number of available task slots by 1
@@ -53,6 +56,19 @@ export class Node extends EventEmitter {
     }
     get numUsedTaskSlots(): number {
         return this.totalTaskSlots - this._numAvailableTaskSlots;
+    }
+    get idle(): boolean {
+        return (this.numUsedTaskSlots === 0);
+    }
+    get lastIdleTime(): number {
+        return this._lastIdleTime;
+    }
+    private set lastIdleTime(time: number) {
+        const oldLastIdleTime = this._lastIdleTime;
+        if (oldLastIdleTime !== time) {
+            this._lastIdleTime = time;
+            this.safeEmit('change');
+        }
     }
     get currentLoading(): SystemLoadingInfo {
         return this._currentLoading;
@@ -93,6 +109,7 @@ export class Node extends EventEmitter {
     increaseAvailableTaskSlots(count: number): void {
         assert(count > 0, "Task slot increase count must be positive");
         const old = this._numAvailableTaskSlots;
+        const wasIdle = this.idle;
         this._numAvailableTaskSlots += count;
         if (this._numAvailableTaskSlots > this.totalTaskSlots) {
             this._numAvailableTaskSlots = this.totalTaskSlots;
@@ -100,6 +117,10 @@ export class Node extends EventEmitter {
         if (this._numAvailableTaskSlots !== old) {
             this.safeEmit('task-slots-change');
             this.safeEmit('change');
+        }
+        if (!wasIdle && this.idle) {
+            this.lastIdleTime = Date.now();
+            this.safeEmit('idle');
         }
     }
     get utilizationPercent(): number {
@@ -186,6 +207,8 @@ export class Node extends EventEmitter {
             numUsedTaskSlots: this.numUsedTaskSlots,
             numUsableTaskSlots: this.numUsableTaskSlots,
             utilization: this.utilization,
+            idle: this.idle,
+            lastIdleTime: this.lastIdleTime,
             cpuUsagePercent: this.cpuUsagePercent,
             memUsagePercent: this.memUsagePercent,
             loadingScore: this.loadingScore,
