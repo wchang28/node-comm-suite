@@ -1,3 +1,4 @@
+import * as fs from "fs";
 import {Client} from "../sse-request/client.js";
 import {RequestContent, RequestResponse} from "../sse-request/types.js";
 import {error_message, is_json_content} from "../utils.js";
@@ -7,8 +8,106 @@ import {error_message, is_json_content} from "../utils.js";
 // RMBS_API_BASE_URL
 const PROXY_SERVER_BASE_URL: string = (process.env.PROXY_SERVER_BASE_URL ? process.env.PROXY_SERVER_BASE_URL : `http://localhost:80`);
 console.log(`PROXY_SERVER_BASE_URL=${PROXY_SERVER_BASE_URL}`);
-const RMBS_API_BASE_URL: string = (process.env.RMBS_API_BASE_URL ? process.env.RMBS_API_BASE_URL : `http://rmbsapp03.cerberuscapital.com:8080`);
-console.log(`RMBS_API_BASE_URL=${RMBS_API_BASE_URL}`);
+const ROUTE_MAP_DEF_JSON: string = (process.env.ROUTE_MAP_DEF_JSON ? process.env.ROUTE_MAP_DEF_JSON : `route-map.json`);
+console.log(`ROUTE_MAP_DEF_JSON=${ROUTE_MAP_DEF_JSON}`);
+
+interface RouteMapItem {
+    routePath: string;
+    baseUrl: string;
+}
+
+type RouteMapDefs = RouteMapItem[];
+
+// load and validate a RouteMapDefs JSON file, e.g.
+// [{"routePath": "/some-route-path", "baseUrl": "http://localhost:8080"}]
+function loadRouteMapDefs(filePath: string): RouteMapDefs {
+    const content = fs.readFileSync(filePath, "utf8");
+    let parsed: unknown;
+    try {
+        parsed = JSON.parse(content);
+    } catch (error) {
+        throw new Error(`Invalid JSON in route map file ${filePath}: ${error_message(error as any)}`);
+    }
+    if (!Array.isArray(parsed)) {
+        throw new Error(`Route map file ${filePath} must contain a JSON array`);
+    }
+    return parsed.map((item, i) => {
+        if (!item || typeof item !== "object" || typeof item.routePath !== "string" || typeof item.baseUrl !== "string") {
+            throw new Error(`Route map file ${filePath}: item ${i} must have string "routePath" and "baseUrl"`);
+        }
+        const {routePath, baseUrl} = item as RouteMapItem;
+        return {routePath, baseUrl};
+    });
+}
+
+const routeDefs: RouteMapDefs = loadRouteMapDefs(ROUTE_MAP_DEF_JSON);
+
+const routeMap: {[key: string]: string} = {};
+for (const {routePath, baseUrl} of routeDefs) {
+    routeMap[routePath] = baseUrl;
+}
+
+console.log(`routeMap=\n${JSON.stringify(routeMap, null, 2)}`);
+
+async function handleApiRoutes(request: RequestContent) {
+    const {path, method, body: reqBody, headers: hdrs} = request;
+    for (const routePath in routeMap) { // for each routePath in routeMap
+        if (path.startsWith(routePath)) {   // if the request path starts with the routePath
+            try {
+                const api_path = path.substring(routePath.length);
+                const baseUrl = routeMap[routePath];
+                const fetchUrl = `${baseUrl}${api_path}`;
+                //console.log(`fetchUrl=${fetchUrl}`);
+                const headers = hdrs || {};
+                const reqInit: RequestInit = {
+                    method,
+                    headers,
+                    body: (reqBody == undefined ? undefined : (typeof reqBody === "string" ? reqBody : JSON.stringify(reqBody)))
+                }
+                //console.log(`reqInit=${JSON.stringify(reqInit)}`);
+                const response = await fetch(fetchUrl, reqInit);
+                //console.log(`response.status=${response.status}`);
+                const responseHeaders: {[key: string]: string} = {};
+                response.headers.forEach((value, key) => {
+                    responseHeaders[key] = value;
+                });
+                //console.log(`responseHeaders=${JSON.stringify(responseHeaders)}`);
+                let resBody: any = null;
+                const hasContent = ("content-type" in responseHeaders && responseHeaders["content-type"].length > 0);
+                if (hasContent) {
+                    if (is_json_content(responseHeaders["content-type"])) {
+                        resBody = await response.json();
+                    } else {
+                        resBody = await response.text();
+                    }
+                }
+                const res: RequestResponse = {
+                    status: response.status,
+                    headers: responseHeaders,
+                    body: resBody
+                };
+                return res;
+            } catch(error) {
+                const res: RequestResponse = {
+                    status: 500,
+                    headers: {"content-type": "application/json"},
+                    body: {
+                        message: error_message(error as any)
+                    }
+                };
+                return res;
+            }
+        }
+    }
+    const response: RequestResponse = {
+        status: 404,
+        headers: {"content-type": "application/json"},
+        body: {
+            message: `Unsupported request. Path: ${path}, Method: ${method}`
+        }
+    };
+    return response;
+}
 
 async function requestProcessor(request: RequestContent) {
     const {path, method, body: reqBody, headers: hdrs} = request;
@@ -23,60 +122,8 @@ async function requestProcessor(request: RequestContent) {
             }
         };
         return response;
-    } else if (path.substring(0, "/rmbs-api".length) == "/rmbs-api") {
-        try {
-            const api_path = path.substring("/rmbs-api".length);
-            const fetchUrl = `${RMBS_API_BASE_URL}${api_path}`;
-            //console.log(`fetchUrl=${fetchUrl}`);
-            const headers = hdrs || {};
-            const reqInit: RequestInit = {
-                method,
-                headers,
-                body: (reqBody == undefined ? undefined : (typeof reqBody === "string" ? reqBody : JSON.stringify(reqBody)))
-            }
-            //console.log(`reqInit=${JSON.stringify(reqInit)}`);
-            const response = await fetch(fetchUrl, reqInit);
-            //console.log(`response.status=${response.status}`);
-            const responseHeaders: {[key: string]: string} = {};
-            response.headers.forEach((value, key) => {
-                responseHeaders[key] = value;
-            });
-            //console.log(`responseHeaders=${JSON.stringify(responseHeaders)}`);
-            let resBody: any = null;
-            const hasContent = ("content-type" in responseHeaders && responseHeaders["content-type"].length > 0);
-            if (hasContent) {
-                if (is_json_content(responseHeaders["content-type"])) {
-                    resBody = await response.json();
-                } else {
-                    resBody = await response.text();
-                }
-            }
-            const res: RequestResponse = {
-                status: response.status,
-                headers: responseHeaders,
-                body: resBody
-            };
-            return res;
-        }
-        catch(error) {
-            const res: RequestResponse = {
-                status: 500,
-                headers: {"content-type": "application/json"},
-                body: {
-                    message: error_message(error as any)
-                }
-            };
-            return res;
-        }
     } else {
-        const response: RequestResponse = {
-            status: 404,
-            headers: {"content-type": "application/json"},
-            body: {
-                message: `Unsupported request. Path: ${path}, Method: ${method}`
-            }
-        };
-        return response;
+        return await handleApiRoutes(request);
     }
 }
 

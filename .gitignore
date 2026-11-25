@@ -58,3 +58,4 @@ sensitive/
 test-data/
 db-configs*.json
 counter*.json
+route-map*.json

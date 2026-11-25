@@ -5,7 +5,7 @@ import {Connection, ConnectionManager as RequestConnectionManager} from '../sse-
 import {is_json_content} from '../utils.js';
 
 const PORT: number = (process.env.PORT ? parseInt(process.env.PORT) : 8080);
-const HOSTNAME: string = process.env.HOSTNAME || '0.0.0.0';
+const LISTEN_HOST: string = process.env.LISTEN_HOST || '0.0.0.0';
 
 const app = express();
 app.disable('x-powered-by');
@@ -99,10 +99,10 @@ async (req: Request, res: Response) => {
 );
 
 // Start server
-const server = app.listen(PORT, HOSTNAME, () => {
-    console.log(`Proxy server running on http://${HOSTNAME}:${PORT}`);
-    console.log(`Agent SSE endpoint: http://${HOSTNAME}:${PORT}/agent/events`);
-    console.log(`Health check: http://${HOSTNAME}:${PORT}/health`);
+const server = app.listen(PORT, LISTEN_HOST, () => {
+    console.log(`Proxy server running on http://${LISTEN_HOST}:${PORT}`);
+    console.log(`Agent connection SSE endpoint: http://${LISTEN_HOST}:${PORT}/agent/events`);
+    console.log(`Health check: http://${LISTEN_HOST}:${PORT}/health`);
 });
 
 // Disable all built-in Node.js HTTP timeouts
