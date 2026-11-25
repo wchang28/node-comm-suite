@@ -228,9 +228,10 @@ export class Dispatcher extends EventEmitter {
     get dismountableCandidateNodes(): NodeId[] {
         return this._nodesTracker.dismountableCandidateNodes;
     }
-    // prepare the nodes for dismounting
-    async prepareNodesForDismounting(nodeIds: NodeId[]) {
-        await this._nodesTracker.prepareNodesForDismounting(nodeIds);
+    // prepare the candidate nodes for dismounting
+    // returns the list of candidate node IDs that were successfully prepared for dismounting
+    async prepareNodesForDismounting(candidateNodeIds: NodeId[]) {
+        return await this._nodesTracker.prepareNodesForDismounting(candidateNodeIds);
     }
     async killJob(jobId: JobId) {
         if (this.state == "started") {

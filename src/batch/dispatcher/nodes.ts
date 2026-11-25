@@ -235,13 +235,19 @@ export class Node extends EventEmitter {
         return (this._enabled && this.idle && !this.dismounting);
     }
     // prepare the node for dismounting by disabling it and waiting for it to become idle
+    // returns the node ID if successfully prepared for dismounting, otherwise returns null
     async prepareForDismounting() {
-        this.disable(); // disable the node for first before dismounting
-        // mark the node as dismounting if it is not already marked
-        if (!this.dismounting) {
-            this.dismounting = true;
+        try {
+            this.disable(); // disable the node for first before dismounting
+            // mark the node as dismounting if it is not already marked
+            if (!this.dismounting) {
+                this.dismounting = true;
+            }
+            await this.forIdle();   // wait for the node to become idle before dismounting
+            return this.id; // if successful, return the node ID
+        } catch(_) {
+            return null;    // if failed, return null
         }
-        await this.forIdle();   // wait for the node to become idle before dismounting
     }
     toJSON(): NodeInfoRow {
         return {
@@ -509,16 +515,19 @@ export class NodesTracker extends EventEmitter implements INodeTaskDispatcher {
         const candidateNodes = Array.from(this._nodes.values()).filter(node => (node.dismountableCandidate));
         return candidateNodes.map(node => node.id);
     }
-    // prepare the nodes for dismounting
-    async prepareNodesForDismounting(nodeIds: NodeId[]) {
-        const promises: Promise<void>[] = [];
-        for (const nodeId of nodeIds) {
+    // prepare the candidate nodes for dismounting
+    // returns the list of candidate node IDs that were successfully prepared for dismounting
+    async prepareNodesForDismounting(candidateNodeIds: NodeId[]) {
+        const promises: Promise<NodeId | null>[] = [];
+        for (const nodeId of candidateNodeIds) {
             const node = this.node(nodeId);
-            if (node) {
+            if (node && node.dismountableCandidate) {
                 promises.push(node.prepareForDismounting());
             }
         }
-        await Promise.all(promises);
+        const results = await Promise.all(promises);
+        const preparedForDismountingNodeIds = results.filter(result => result !== null) as NodeId[];
+        return preparedForDismountingNodeIds;
     }
     get nodesSessionIds(): NodeSessionId[] {
         return this._nodeList.map(node => node.sessionId);
