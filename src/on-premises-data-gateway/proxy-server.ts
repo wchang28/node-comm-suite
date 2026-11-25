@@ -31,10 +31,10 @@ const REQUEST_TIMEOUT_MS = 1800000; // 1800000 seconds = 30 mins
 const connectionManager = new RequestConnectionManager(PING_INTERVAL_MS, REQUEST_TIMEOUT_MS, 1);
 
 connectionManager.on("connected", async (connection) => {
-    console.log(`client <<connected>>. Connection ID: ${connection.connId}`);
+    console.log(`client <<connected>>. Connection ID: ${connection.connId}, remoteSocketAddress=${connection.remoteSocketAddress}`);
     console.log(`# of connections = ${connectionManager.numConnections}`);
 }).on("disconnected", (connection) => {
-    console.log(`client <<disconnected>>. Connection ID: ${connection.connId}`);
+    console.log(`client <<disconnected>>. Connection ID: ${connection.connId}, remoteSocketAddress=${connection.remoteSocketAddress}`);
     console.log(`# of connections = ${connectionManager.numConnections}`);
 }).on("connection-rejected", (remoteAddress, remotePort) => {
     console.log(`client <<connection-rejected>>. remoteAddress=${remoteAddress}, remotePort=${remotePort}`);
