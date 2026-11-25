@@ -5,11 +5,11 @@ import helmet from 'helmet';
 import { access, constants } from 'node:fs/promises';
 import { FileBasedSequenceNumberGenerator } from '../file-based-sequence-number-generator.js';
 // environment variables
-// 1. PORT and HOSTNAME
+// 1. PORT and LISTEN_HOST
 // 2. SEQUENCE_JSON_FILE
 // 3. AUTH_TOKEN
 const PORT = Number(process.env.PORT ?? 8080);
-const HOSTNAME = process.env.HOSTNAME ?? '0.0.0.0';
+const LISTEN_HOST = process.env.LISTEN_HOST ?? '0.0.0.0';
 if (!Number.isInteger(PORT) || PORT <= 0 || PORT > 65535) {
     throw new Error(`Invalid PORT: ${process.env.PORT}`);
 }
@@ -114,12 +114,12 @@ app.get("/status", async (req: Request, res: Response) => {
     });
 });
 
-const server = app.listen(PORT, HOSTNAME, (err?: Error) => {
+const server = app.listen(PORT, LISTEN_HOST, (err?: Error) => {
     if (err) {
         console.error('Failed to start server:', err);
         process.exit(1);
     }
-    console.log(`Sequence number generator running on http://${HOSTNAME}:${PORT}/`);
+    console.log(`Sequence number generator running on http://${LISTEN_HOST}:${PORT}/`);
     console.log(`Sequence file: ${sequenceFilePath}`);
 });
 
