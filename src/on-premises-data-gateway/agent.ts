@@ -15,7 +15,6 @@ interface RouteMapItem {
     routePath: string;
     baseUrl: string;
 }
-
 type RouteMapDefs = RouteMapItem[];
 
 // load and validate a RouteMapDefs JSON file, e.g.
@@ -40,22 +39,25 @@ function loadRouteMapDefs(filePath: string): RouteMapDefs {
     });
 }
 
-const routeDefs: RouteMapDefs = loadRouteMapDefs(ROUTE_MAP_DEF_JSON);
-
-const routeMap: {[key: string]: string} = {};
-for (const {routePath, baseUrl} of routeDefs) {
-    routeMap[routePath] = baseUrl;
+function loadRouteMapping(filePath: string) : {[key: string]: string} {
+    const routeDefs = loadRouteMapDefs(filePath);
+    const routeMap: {[key: string]: string} = {};
+    for (const {routePath, baseUrl} of routeDefs) {
+        routeMap[routePath] = baseUrl;
+    }
+    return routeMap;
 }
 
-console.log(`routeMap=\n${JSON.stringify(routeMap, null, 2)}`);
+let routeMapping: {[key: string]: string} = loadRouteMapping(ROUTE_MAP_DEF_JSON);
+console.log(`routeMapping=\n${JSON.stringify(routeMapping, null, 2)}`);
 
 async function handleApiRoutes(request: RequestContent) {
     const {path, method, body: reqBody, headers: hdrs} = request;
-    for (const routePath in routeMap) { // for each routePath in routeMap
+    for (const routePath in routeMapping) { // for each routePath in routeMap
         if (path.startsWith(routePath)) {   // if the request path starts with the routePath
             try {
                 const api_path = path.substring(routePath.length);
-                const baseUrl = routeMap[routePath];
+                const baseUrl = routeMapping[routePath];
                 const fetchUrl = `${baseUrl}${api_path}`;
                 //console.log(`fetchUrl=${fetchUrl}`);
                 const headers = hdrs || {};
@@ -122,7 +124,25 @@ async function requestProcessor(request: RequestContent) {
             }
         };
         return response;
-    } else {
+    }
+    else if (path === "/route-mapping" && method === "GET") {
+        const response: RequestResponse = {
+            status: 200,
+            headers: {"content-type": "application/json"},
+            body: routeMapping
+        };
+        return response;
+    }
+    else if (path === "/route-mapping/reload" && method === "GET") {
+        routeMapping = loadRouteMapping(ROUTE_MAP_DEF_JSON);
+        const response: RequestResponse = {
+            status: 200,
+            headers: {"content-type": "application/json"},
+            body: routeMapping
+        };
+        return response;
+    } 
+    else {
         return await handleApiRoutes(request);
     }
 }
