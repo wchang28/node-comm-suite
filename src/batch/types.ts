@@ -97,7 +97,8 @@ export interface NodeInfoRow {
     numUsableTaskSlots: number;
     utilization: string;
     idle: boolean;
-    lastIdleTime: number;
+    lastIdleTime: number | null;
+    dismounting: boolean;
     cpuUsagePercent: number;
     memUsagePercent: number;
     loadingScore: number;

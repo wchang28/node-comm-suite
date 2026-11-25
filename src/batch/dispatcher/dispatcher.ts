@@ -224,6 +224,14 @@ export class Dispatcher extends EventEmitter {
     get numUsableTaskSlots(): number {
         return this._nodesTracker.numUsableTaskSlots;
     }
+    // return the list of dismountable candidate nodes at the moment
+    get dismountableCandidateNodes(): NodeId[] {
+        return this._nodesTracker.dismountableCandidateNodes;
+    }
+    // prepare the nodes for dismounting
+    async prepareNodesForDismounting(nodeIds: NodeId[]) {
+        await this._nodesTracker.prepareNodesForDismounting(nodeIds);
+    }
     async killJob(jobId: JobId) {
         if (this.state == "started") {
             this._queue.removeJob(jobId);    // remove the job tasks from the dispatch queue

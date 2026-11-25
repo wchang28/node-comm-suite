@@ -26,7 +26,8 @@ export interface NodeEvents {
     "change": () => void;
     "enabled": () => void;
     "disabled": () => void;
-    "idle": () => void; // fired when the node becomes idle
+    "idle": () => void; // fired when the node becomes idle (running tasks -> not running tasks)
+    "active": () => void; // fired when the node becomes active (not running tasks -> running tasks)
     "task-slots-change": () => void; // fire when any (available/usable) task slots related change
     "task-finished": (payload: TaskFinishedMsgPayload) => void; // fired when a task has finished on this node
 }
@@ -34,7 +35,8 @@ export interface NodeEvents {
 export class Node extends EventEmitter {
     private _enabled: boolean = true;
     private _numAvailableTaskSlots: number;
-    private _lastIdleTime: number;
+    private _dismounting: boolean = false;
+    private _lastIdleTime: number | null;
     constructor(private _connection: Connection, public id: NodeId, public sessionId: NodeSessionId, public hostname: NodeName, public totalTaskSlots: number, private _currentLoading: SystemLoadingInfo) {
         super();
         assert(this.id, "Node ID must be defined");
@@ -43,6 +45,7 @@ export class Node extends EventEmitter {
         assert(this.hostname, `Node hostname must be defined (node=${id})`);
         assert(this.totalTaskSlots > 0, `Total CPUs must be greater than 0 (node=${id}, totalTaskSlots=${totalTaskSlots})`);
         this._numAvailableTaskSlots = this.totalTaskSlots;
+        this._dismounting = false;
         this._lastIdleTime = Date.now();
         this._connection.on("message", (event: string, data?: any) => { // the connection received a message
             if (event === "task-finished") {    // one task is finished on this node
@@ -60,13 +63,23 @@ export class Node extends EventEmitter {
     get idle(): boolean {
         return (this.numUsedTaskSlots === 0);
     }
-    get lastIdleTime(): number {
+    get lastIdleTime(): number | null {
         return this._lastIdleTime;
     }
-    private set lastIdleTime(time: number) {
+    private set lastIdleTime(time: number | null) {
         const oldLastIdleTime = this._lastIdleTime;
         if (oldLastIdleTime !== time) {
             this._lastIdleTime = time;
+            this.safeEmit('change');
+        }
+    }
+    get dismounting(): boolean {
+        return this._dismounting;
+    }
+    private set dismounting(value: boolean) {
+        const oldValue = this._dismounting;
+        if (oldValue !== value) {
+            this._dismounting = value;
             this.safeEmit('change');
         }
     }
@@ -96,7 +109,8 @@ export class Node extends EventEmitter {
     }
     decreaseAvailableTaskSlots(count: number): void {
         assert(count > 0, "Task slot decrease count must be positive");
-        const old = this._numAvailableTaskSlots; 
+        const old = this._numAvailableTaskSlots;
+        const wasIdle = this.idle;
         this._numAvailableTaskSlots -= count;
         if (this._numAvailableTaskSlots < 0) {
             this._numAvailableTaskSlots = 0;
@@ -104,6 +118,10 @@ export class Node extends EventEmitter {
         if (this._numAvailableTaskSlots !== old) {
             this.safeEmit('task-slots-change');
             this.safeEmit('change');
+        }
+        if (wasIdle && !this.idle) {    // idle -> not idle
+            this.lastIdleTime = null;
+            this.safeEmit('active');
         }
     }
     increaseAvailableTaskSlots(count: number): void {
@@ -118,7 +136,7 @@ export class Node extends EventEmitter {
             this.safeEmit('task-slots-change');
             this.safeEmit('change');
         }
-        if (!wasIdle && this.idle) {
+        if (!wasIdle && this.idle) {    // not idle -> idle
             this.lastIdleTime = Date.now();
             this.safeEmit('idle');
         }
@@ -144,6 +162,12 @@ export class Node extends EventEmitter {
             this.safeEmit('task-slots-change');
             this.safeEmit('change');
         }
+    }
+    enable() {
+        this.enabled = true;
+    }
+    disable() {
+        this.enabled = false;
     }
     get totalEnabledTaskSlots(): number {
         return this.enabled ? this.totalTaskSlots : 0;
@@ -196,6 +220,29 @@ export class Node extends EventEmitter {
             this.currentLoading = loading;
         } catch (_) {}
     }
+    // wait for node to become idle
+    async forIdle() {
+        let idlePrmmise: Promise<void> = Promise.resolve();
+        if (!this.idle) {
+            idlePrmmise = new Promise<void>((resolve) => {
+                this.once("idle", () => resolve());
+            });
+        }
+        await idlePrmmise;
+    }
+    // return whether the node is a candidate for dismounting
+    get dismountableCandidate() : boolean {
+        return (this._enabled && this.idle && !this.dismounting);
+    }
+    // prepare the node for dismounting by disabling it and waiting for it to become idle
+    async prepareForDismounting() {
+        this.disable(); // disable the node for first before dismounting
+        // mark the node as dismounting if it is not already marked
+        if (!this.dismounting) {
+            this.dismounting = true;
+        }
+        await this.forIdle();   // wait for the node to become idle before dismounting
+    }
     toJSON(): NodeInfoRow {
         return {
             id: this.id,
@@ -209,6 +256,7 @@ export class Node extends EventEmitter {
             utilization: this.utilization,
             idle: this.idle,
             lastIdleTime: this.lastIdleTime,
+            dismounting: this.dismounting,
             cpuUsagePercent: this.cpuUsagePercent,
             memUsagePercent: this.memUsagePercent,
             loadingScore: this.loadingScore,
@@ -454,6 +502,22 @@ export class NodesTracker extends EventEmitter implements INodeTaskDispatcher {
     async updateNodesSystemLoading() {
         const nodes = Array.from(this._nodes.values());
         const promises = nodes.map(node => node.updateSystemLoading());
+        await Promise.all(promises);
+    }
+    // return the list of dismountable candidate nodes at the moment
+    get dismountableCandidateNodes(): NodeId[] {
+        const candidateNodes = Array.from(this._nodes.values()).filter(node => (node.dismountableCandidate));
+        return candidateNodes.map(node => node.id);
+    }
+    // prepare the nodes for dismounting
+    async prepareNodesForDismounting(nodeIds: NodeId[]) {
+        const promises: Promise<void>[] = [];
+        for (const nodeId of nodeIds) {
+            const node = this.node(nodeId);
+            if (node) {
+                promises.push(node.prepareForDismounting());
+            }
+        }
         await Promise.all(promises);
     }
     get nodesSessionIds(): NodeSessionId[] {
