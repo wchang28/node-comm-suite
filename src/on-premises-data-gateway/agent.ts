@@ -59,7 +59,7 @@ async function handleApiRoutes(request: RequestContent) {
                 const api_path = path.substring(routePath.length);
                 const baseUrl = routeMapping[routePath];
                 const fetchUrl = `${baseUrl}${api_path}`;
-                //console.log(`fetchUrl=${fetchUrl}`);
+                console.log(`fetchUrl=${fetchUrl}`);
                 const headers = hdrs || {};
                 const reqInit: RequestInit = {
                     method,
@@ -73,6 +73,9 @@ async function handleApiRoutes(request: RequestContent) {
                 response.headers.forEach((value, key) => {
                     responseHeaders[key] = value;
                 });
+                if (!("content-type" in responseHeaders) && "content-length" in responseHeaders && parseInt(responseHeaders["content-length"]) > 0) {
+                    responseHeaders["content-type"] = "text/plain; charset=UTF-8";
+                }
                 //console.log(`responseHeaders=${JSON.stringify(responseHeaders)}`);
                 let resBody: any = null;
                 const hasContent = ("content-type" in responseHeaders && responseHeaders["content-type"].length > 0);
@@ -110,6 +113,11 @@ async function handleApiRoutes(request: RequestContent) {
     };
     return response;
 }
+
+// support the following maintenance routes:
+// GET /health
+// GET /route-mapping
+// GET /route-mapping/reload
 
 async function requestProcessor(request: RequestContent) {
     const {path, method, body: reqBody, headers: hdrs} = request;
