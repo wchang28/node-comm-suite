@@ -20,7 +20,7 @@ export type TaskDispatchError = TaskLauncherAckError | SSERequestError | Connect
 export interface DispatchResultRow {
     j: JobId;
     t: TaskIndex;
-    nodeId: NodeId;
+    nodeId: NodeId;         // id of the node the task was dispatched to
     startTime: number;      // start dispatch time
     endTime: number | null; // end dispatch time 
     durationMS: number | null;  // duration of the dispatch in milliseconds
@@ -29,9 +29,10 @@ export interface DispatchResultRow {
 };
 
 export type DispatchErrors = TaskSlotsUsageByNode;
+export type DispatchSessionId = string;
 
 export interface DispatchSessionJSON {
-    sessionId: string;
+    sessionId: DispatchSessionId;
     numTasks: number;
     numCompleted: number;
     completed: boolean;
@@ -42,9 +43,9 @@ export interface DispatchSessionJSON {
 }
 
 export interface DispatchSessionEvents {
-    "node-to-be-dispatched-one-task": (nodeId: NodeId, taskItem: TaskItem) => void;
+    "node-to-be-dispatched-one-task": (nodeId: NodeId, taskItem: TaskItem, sessionId: DispatchSessionId) => void;
     "task-slots-usage-assignment": (cpusUsage: TaskSlotsUsageByNode) => void;   // emitted only once when the task slots usage is assigned at the start of the dispatch session
-    "one-task-dispatched": (row: DispatchResultRow) => void;
+    "one-task-dispatched": (row: DispatchResultRow, sessionId: DispatchSessionId) => void;
     "session-completed": (sessionJSON: DispatchSessionJSON) => void;    // emitted only once when the dispatch session is completed
     "change": () => void;
 }
@@ -71,7 +72,7 @@ export class DispatchSession extends EventEmitter {
         row.durationMS = row.endTime - row.startTime;
         row.pid = pid;
         row.error = error || null;
-        this.safeEmit("one-task-dispatched", row);   
+        this.safeEmit("one-task-dispatched", row, this.sessionId);
         const json = this._dispatchSessionJSON;
         json.numCompleted++;
         if (json.numCompleted === json.numTasks) {
@@ -114,7 +115,7 @@ export class DispatchSession extends EventEmitter {
                     error: null
                 };
                 me.safeEmit("change");
-                me.safeEmit("node-to-be-dispatched-one-task", nodeId, taskItem);
+                me.safeEmit("node-to-be-dispatched-one-task", nodeId, taskItem, this.sessionId);
                 const row = me._dispatchSessionJSON.rows[i];
                 me._dispatcher.dispatchTaskToNode(nodeId, taskItem)
                 .then((pid) => {
@@ -130,7 +131,7 @@ export class DispatchSession extends EventEmitter {
         });
         return completionPromise;
     }
-    get sessionId(): string {
+    get sessionId(): DispatchSessionId {
         return this._dispatchSessionJSON.sessionId;
     }
     get numCompleted(): number {

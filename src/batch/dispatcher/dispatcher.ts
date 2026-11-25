@@ -2,7 +2,7 @@ import { EventEmitter } from 'node:events';
 import { ConnectionManager } from '../../sse-request/connection-manager.js';
 import { Queue} from './queue.js';
 import { Node, NodesTracker } from './nodes.js'
-import { DispatchSession, DispatchResultRow } from './dispatch-session.js';
+import { DispatchSession, DispatchResultRow, DispatchSessionId } from './dispatch-session.js';
 import type {
     JobId,
     NodeIdentifyInfo,
@@ -13,7 +13,8 @@ import type {
     DispatcherJSON,
     QueueJSON,
     NodesTrackerJSON,
-    JobKillStatRow
+    JobKillStatRow,
+    TaskFinishedMsgPayload
 } from '../types.js';
 import { NodesJobKiller } from './nodes-job-killer.js';
 import {Pooling} from "../../pooling.js";
@@ -22,9 +23,12 @@ export interface DispatcherEvents {
     "change": () => void;
     "state-change": (oldState: DispatcherState, newState: DispatcherState) => void;
     "queue-change": () => void;
+    "queue-empty": () => void;
     "nodes-tracker-change": () => void;   
     "job-killer-change": () => void;
     "node-added": (node: Node) => void;
+    "node-removed": (node: Node) => void;
+    "task-finished-on-node": (node: Node, payload: TaskFinishedMsgPayload) => void;
     "killing-job": (jobId: JobId) => void;
     "job-killed": (jobId: JobId) => void;
     "job-kill-retry": (jobId: JobId, retryIndex: number, numProcessKilled: number) => void;
@@ -33,8 +37,8 @@ export interface DispatcherEvents {
     "disabled": () => void;
     "dispatching": (sessionId: string) => void;
     "dispatch-completed": (dispatchSession: DispatchSession) => void;
-    "node-to-be-dispatched-one-task": (nodeId: NodeId, taskItem: TaskItem) => void;
-    "one-task-dispatched": (resultRow: DispatchResultRow) => void;
+    "node-to-be-dispatched-one-task": (nodeId: NodeId, taskItem: TaskItem, sessionId: DispatchSessionId) => void;
+    "one-task-dispatched": (resultRow: DispatchResultRow, sessionId: DispatchSessionId) => void;
     "started": () => void;
     "stopping": () => void;
     "stopped": () => void;
@@ -66,6 +70,8 @@ export class Dispatcher extends EventEmitter {
             this.dispatchTasksIfNecessary();
         }).on("change", () => {
             this.safeEmit('queue-change');
+        }).on("queue-empty", () => {
+            this.safeEmit("queue-empty");
         });
         this._nodesTracker.on("task-slots-change", () => {
             this.dispatchTasksIfNecessary();
@@ -73,6 +79,10 @@ export class Dispatcher extends EventEmitter {
             this.safeEmit("nodes-tracker-change");
         }).on("node-added", (node) => {
             this.safeEmit("node-added", node);
+        }).on("node-removed", (node) => {
+            this.safeEmit("node-removed", node);
+        }).on("task-finished-on-node", (node, payload) => {
+            this.safeEmit("task-finished-on-node", node, payload);
         });
         this.on("enabled", () => {
             this.dispatchTasksIfNecessary();
@@ -166,11 +176,11 @@ export class Dispatcher extends EventEmitter {
                 const tasks = this._queue.dequeueTasks(usableTaskSlots.length);
                 const dispatchSession = new DispatchSession(this._nodesTracker);
                 this.currentDispatchingSession = dispatchSession;   // mark the start of a dispatch session
-                const nodeToBeDispatchedOneTaskListener = (nodeId: NodeId, taskItem: TaskItem) => {
-                    this.safeEmit("node-to-be-dispatched-one-task", nodeId, taskItem);
+                const nodeToBeDispatchedOneTaskListener = (nodeId: NodeId, taskItem: TaskItem, sessionId: DispatchSessionId) => {
+                    this.safeEmit("node-to-be-dispatched-one-task", nodeId, taskItem, sessionId);
                 };
-                const oneTaskDispatchedListener = (row: DispatchResultRow) => {
-                    this.safeEmit("one-task-dispatched", row);
+                const oneTaskDispatchedListener = (row: DispatchResultRow, sessionId: DispatchSessionId) => {
+                    this.safeEmit("one-task-dispatched", row, sessionId);
                 };
                 dispatchSession.once("task-slots-usage-assignment", (taskSlotsUsage) => {
                     this._nodesTracker.increaseTaskSlotsUsageOnNodes(taskSlotsUsage); // increase task slots usage on nodes based on the dispatch assignments by assuming every task dispatch to the node is successful.
@@ -207,6 +217,12 @@ export class Dispatcher extends EventEmitter {
     }
     setNodesEnabled(nodeIds: NodeId[] | null, enabled: boolean) {
         this._nodesTracker.setNodesEnabled(nodeIds, enabled);
+    }
+    get numNodes(): number {
+        return this._nodesTracker.numNodes;
+    }
+    get numUsableTaskSlots(): number {
+        return this._nodesTracker.numUsableTaskSlots;
     }
     async killJob(jobId: JobId) {
         if (this.state == "started") {

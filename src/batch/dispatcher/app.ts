@@ -57,8 +57,8 @@ dispatcher.on("dispatching", (sessionId) => {
     console.log(`Dispatcher <<dispatching>>: sessionId=${sessionId}`);
 }).on("dispatch-completed", (dispatchSession) => {
     console.log(`Dispatcher <<dispatch-completed>>:`, JSON.stringify(dispatchSession.toJSON()));
-}).on("one-task-dispatched", (row) => {
-    console.log(`Dispatcher <<one-task-dispatched>>:`, JSON.stringify(row));
+}).on("one-task-dispatched", (row, sessionId) => {
+    console.log(`Dispatcher <<one-task-dispatched>>: sessionId=${sessionId}`, JSON.stringify(row));
 }).on("enabled", () => {
     console.log(`Dispatcher <<enabled>>`);
 }).on("disabled", () => {
@@ -69,6 +69,14 @@ dispatcher.on("dispatching", (sessionId) => {
     console.log(`Dispatcher <<stopping>>`);
 }).on("stopped", () => {
     console.log(`Dispatcher <<stopped>>`);
+}).on("node-added", (node) => {
+    console.log(`<<node-added>>: ${node.hostname} (ID: ${node.id}, Session ID: ${node.sessionId}, Total Task Slots: ${node.totalTaskSlots})`);
+    console.log(`Current nodes: ${dispatcher.numNodes}, Usable Task Slots: ${dispatcher.numUsableTaskSlots}`);
+}).on("node-removed", (node) => {
+    console.log(`<<node-removed>>: ${node.hostname} (ID: ${node.id}, Session ID: ${node.sessionId})`);
+    console.log(`Current nodes: ${dispatcher.numNodes}, Usable Task Slots: ${dispatcher.numUsableTaskSlots}`);
+}).on("task-finished-on-node", (node, payload) => {
+    console.log(`Node ${node.hostname} (ID: ${node.id}) <<task-finished-on-node>>:`, JSON.stringify(payload));
 }).on("killing-job", (jobId) => {
     console.log(`<<killing-job>>: jobId=${jobId}`);
 }).on("job-killed", (jobId) => {
@@ -78,17 +86,6 @@ dispatcher.on("dispatching", (sessionId) => {
 }).on("job-kill-error", (jobId, error) => {
     console.log(`<<job-kill-error>>: jobId=${jobId}, error=${error}`);
 }).start();
-
-const nodesTracker = dispatcher.nodesTracker;
-nodesTracker.on("node-added", (node) => {
-    console.log(`Node <<added>>: ${node.hostname} (ID: ${node.id}, Session ID: ${node.sessionId}, Total Task Slots: ${node.totalTaskSlots})`);
-}).on("node-removed", (node) => {
-    console.log(`Node <<removed>>: ${node.hostname} (ID: ${node.id}, Session ID: ${node.sessionId})`);
-}).on("change", () => {
-    console.log(`NodesTracker <<changed>>. Current nodes: ${nodesTracker.numNodes}, Usable Task Slots: ${nodesTracker.numUsableTaskSlots}`);
-}).on("task-finished-on-node", (node, payload) => {
-    console.log(`Node ${node.hostname} (ID: ${node.id}) <<task-finished-on-node>>:`, JSON.stringify(payload));
-});
 
 const taskLauncherRouter = express.Router();
 app.use('/task-launcher', taskLauncherRouter);
