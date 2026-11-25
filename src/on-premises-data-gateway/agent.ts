@@ -6,7 +6,7 @@ import {error_message, is_json_content} from "../utils.js";
 // Environment Configuration
 // PROXY_SERVER_BASE_URL
 // RMBS_API_BASE_URL
-const PROXY_SERVER_BASE_URL: string = (process.env.PROXY_SERVER_BASE_URL ? process.env.PROXY_SERVER_BASE_URL : `http://localhost:80`);
+const PROXY_SERVER_BASE_URL: string = (process.env.PROXY_SERVER_BASE_URL ? process.env.PROXY_SERVER_BASE_URL : `http://localhost:8080`);
 console.log(`PROXY_SERVER_BASE_URL=${PROXY_SERVER_BASE_URL}`);
 const ROUTE_MAP_DEF_JSON: string = (process.env.ROUTE_MAP_DEF_JSON ? process.env.ROUTE_MAP_DEF_JSON : `route-map.json`);
 console.log(`ROUTE_MAP_DEF_JSON=${ROUTE_MAP_DEF_JSON}`);
